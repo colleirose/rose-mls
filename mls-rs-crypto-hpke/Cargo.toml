@@ -7,7 +7,7 @@ homepage = "https://github.com/awslabs/mls-rs"
 repository = "https://github.com/awslabs/mls-rs"
 keywords = ["mls", "mls-rs", "HPKE"]
 categories = ["no-std", "cryptography"]
-license = "Apache-2.0 OR MIT"
+license = "MIT"
 
 [features]
 default = ["std"]

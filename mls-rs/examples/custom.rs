@@ -1,6 +1,5 @@
-// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // Copyright by contributors to this project.
-// SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// SPDX-License-Identifier: MIT
 
 /// The example shows how how to create an MLS extension implementing an access control policy
 /// based on the concept of users, similar to

@@ -1,6 +1,5 @@
-// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // Copyright by contributors to this project.
-// SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// SPDX-License-Identifier: MIT
 
 //! An implementation of the [IETF Messaging Layer Security](https://messaginglayersecurity.rocks)
 //! end-to-end encryption (E2EE) protocol.

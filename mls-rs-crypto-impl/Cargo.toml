@@ -3,8 +3,8 @@ name = "mls-rs-crypto-impl"
 version = "0.18.0"
 edition = "2021"
 description = "CryptoProvider for mls-rs"
-keywords = ["mls", "mls-rs", "openssl"]
-license = "Apache-2.0 OR MIT"
+keywords = ["mls", "mls-rs"]
+license = "MIT"
 
 [features]
 x509 = ["mls-rs-identity-x509"]
@@ -14,7 +14,7 @@ post-quantum = ["aws-lc-rs/unstable", "mls-rs-core/post-quantum"]
 default = ["x509", "non-fips", "post-quantum"]
 
 [dependencies]
-openssl = { version = "0.10.40" }
+openssl = { version = "0.10", features = ["vendored"] }
 
 aws-lc-rs = { version = "=1.14.1", default-features = false, features = ["alloc"] }
 aws-lc-sys = { version = "=0.32", optional = true }

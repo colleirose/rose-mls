@@ -1,6 +1,5 @@
-// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // Copyright by contributors to this project.
-// SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// SPDX-License-Identifier: MIT
 
 use std::{ffi::c_void, mem::MaybeUninit, ops::Deref, ptr::null_mut};
 
@@ -10,7 +9,7 @@ use aws_lc_rs::{
 use aws_lc_sys::EVP_PKEY_ED448;
 use openssl::{pkey::PKey, sign::Signer};
 //use aws_lc_sys::{EC_KEY_OpenSSL, NID_X9_62_prime256v1, NID_secp384r1, NID_secp521r1};
-//use sec1::EcPrivateKey;
+use sec1::EcPrivateKey as Sec1PrivKey;
 
 use crate::{aws_lc_sys_impl::{
     ECDSA_SIG_free, ECDSA_SIG_to_bytes, ECDSA_do_sign, ED25519_keypair, ED25519_sign,
@@ -102,15 +101,19 @@ impl AwsLcEcdsa {
                 //     return Err(MlsCryptoError::InvalidKeyData);
                 // }
 
-                unsafe {
-                    check_non_null(EVP_PKEY_new_raw_public_key(
-                        EVP_PKEY_ED448,
-                        std::ptr::null_mut(),
-                        key.as_ptr(),
-                        key.len(),
-                    ))
-                    .map(EvpPkey)
-                }
+                let pkey = openssl::pkey::PKey::public_key_from_raw_bytes(key.as_ref(), openssl::pkey::Id::ED448)
+                    .map_err(|_| MlsCryptoError::InvalidKeyData)?;
+                Ok(EvpPkey(PublicKeyValue::OpenSSL(pkey)))
+
+                // unsafe {
+                //     check_non_null(EVP_PKEY_new_raw_public_key(
+                //         EVP_PKEY_ED448,
+                //         std::ptr::null_mut(),
+                //         key.as_ptr(),
+                //         key.len(),
+                //     ))
+                //     .map(EvpPkey)
+                // }
             }
             _ => {
                 let ec_key = EcPublicKey::from_bytes(key, self.0)?;

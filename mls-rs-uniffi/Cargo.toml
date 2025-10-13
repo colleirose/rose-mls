@@ -7,7 +7,7 @@ homepage = "https://github.com/awslabs/mls-rs"
 repository = "https://github.com/awslabs/mls-rs"
 keywords = ["mls", "e2ee", "uniffi"]
 categories = ["cryptography"]
-license = "Apache-2.0 OR MIT"
+license = "MIT"
 rust-version = "1.68.2"
 
 [lib]

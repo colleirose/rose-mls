@@ -8,8 +8,6 @@ Inspiration from:
 - https://github.com/awslabs/mls-rs/ (used as a base for this code, most of the mls-rs code is still in this repository)
 - https://github.com/openmls/openmls (referenced when converting some of the implementation from aws-lcc to rustcrypto)
 
-There's currently a strange compilation error claiming that the pkey.rs file in the OpenSSL crate has a syntax error because its missing a semicolon. Adding the semicolon leads to another error claiming that the Curve type referenced in the crate isn't defined.
-
 TODO:
 - Make code work correctly
 - Cleanup code
