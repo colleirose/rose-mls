@@ -1,0 +1,37 @@
+name: Fuzz Tests
+on: [pull_request]
+env:
+  CARGO_TERM_COLOR: always
+  SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+  RUNS: 10000
+  TIME: 300
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ''
+          components: clippy, rustfmt
+          toolchain: stable, nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+      - name: Rust Fmt on fuzz targets
+        working-directory: mls-rs/fuzz
+        run: cargo fmt --all -- --check
+      - name: Clippy on fuzz targets
+        working-directory: mls-rs/fuzz
+        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+      - name: Run Fuzz Targets
+        working-directory: mls-rs
+        run: |
+          cargo +nightly fuzz run application_data -- -runs=$RUNS -timeout=$TIME
+          cargo +nightly fuzz run cipher_text -- -runs=$RUNS -timeout=$TIME
+          cargo +nightly fuzz run deserialize -- -runs=$RUNS -timeout=$TIME
+          cargo +nightly fuzz run export_secret -- -runs=$RUNS -timeout=$TIME
+          cargo +nightly fuzz run mls_message -- -runs=$RUNS -timeout=$TIME
+          cargo +nightly fuzz run process_bytes -- -runs=$RUNS -timeout=$TIME
