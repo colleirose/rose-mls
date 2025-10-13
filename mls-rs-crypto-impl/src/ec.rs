@@ -3,6 +3,7 @@
 
 use core::fmt::{self, Debug};
 use std::ptr::null_mut;
+use aws_lc_sys::{EVP_PKEY_CTX_free, EVP_PKEY_CTX_new_id, EVP_PKEY_keygen, EVP_PKEY_keygen_init, EVP_PKEY_ED25519};
 use mls_rs_crypto_traits::Curve;
 use thiserror::Error;
 
@@ -21,7 +22,7 @@ use crate::{aws_lc_sys_impl::{
     EC_KEY_set_private_key, EC_KEY_set_public_key, EC_POINT_copy, EC_POINT_free, EC_POINT_mul,
     EC_POINT_new, EC_POINT_oct2point, EC_POINT_point2oct, EVP_PKEY_free, EVP_PKEY_new,
     EVP_PKEY_set1_EC_KEY, NID_X9_62_prime256v1, NID_secp384r1, NID_secp521r1, EC_POINT, EVP_PKEY,
-}, ed448::{ed448_private_key_from_bytes, ed448_private_key_from_der, ed448_private_key_to_bytes, ed448_private_key_to_public, ed448_pub_key_from_uncompressed, ed448_pub_key_to_uncompressed, generate_ed448_key}};
+}, ed448::{ed448_private_key_from_bytes, ed448_private_key_from_der, ed448_private_key_to_bytes, ed448_private_key_to_public, ed448_pub_key_from_uncompressed, ed448_pub_key_to_uncompressed, ed448_public_key_from_der, generate_ed448_key}};
 use aws_lc_rs::error::Unspecified;
 
 use crate::MlsCryptoError;
@@ -95,7 +96,7 @@ pub fn nist_curve_id(curve: Curve) -> Option<i32> {
 
 // TODO this is duplicative, unsure if still used
 #[inline]
-pub fn ec_public_key(curve: Curve, secret_key: &[u8]) -> Result<Vec<u8>, MlsCryptoError> {
+pub fn private_key_bytes_to_public(curve: Curve, secret_key: &[u8]) -> Result<Vec<u8>, MlsCryptoError> {
     Ok(EcPrivateKey::from_bytes(secret_key, curve)?
         .public_key()?
         .to_vec()?)
@@ -108,6 +109,57 @@ pub fn ec_generate(curve: Curve) -> Result<(Vec<u8>, Vec<u8>), MlsCryptoError> {
     Ok((private_key.to_vec()?, public_key.to_vec()?))
 }
 
+pub fn generate_keypair(curve: Curve) -> Result<KeyPair, MlsCryptoError> {
+    let keys = ec_generate(curve)?;
+    Ok(KeyPair { secret: keys.0, public: keys.1 })
+}
+
+#[derive(Clone, Default)]
+pub struct KeyPair {
+    pub public: Vec<u8>,
+    pub secret: Vec<u8>,
+}
+
+impl Debug for KeyPair {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KeyPair")
+            .field("public", &mls_rs_core::debug::pretty_bytes(&self.public))
+            .finish()
+    }
+}
+
+pub fn private_key_ecdh(
+    private_key: &Ed448PrivateKey,
+    remote_public: &Ed448PublicKey,
+) -> Result<Vec<u8>, ErrorStack> {
+    let mut ecdh_derive = Deriver::new(private_key)?;
+    ecdh_derive.set_peer(remote_public)?;
+    ecdh_derive.derive_to_vec()
+}
+
+pub fn curve_from_nid(nid: Nid) -> Option<Curve> {
+    match nid {
+        Nid::X9_62_PRIME256V1 => Some(Curve::P256),
+        Nid::SECP384R1 => Some(Curve::P384),
+        Nid::SECP521R1 => Some(Curve::P521),
+        _ => None,
+    }
+}
+
+pub fn curve_from_pkey<T: HasParams>(value: &PKey<T>) -> Option<Curve> {
+    match value.id() {
+        Id::X25519 => Some(Curve::X25519),
+        Id::ED25519 => Some(Curve::Ed25519),
+        Id::X448 => Some(Curve::X448),
+        Id::ED448 => Some(Curve::Ed448),
+        Id::EC => value
+            .ec_key()
+            .ok()
+            .and_then(|k| k.group().curve_name())
+            .and_then(curve_from_nid),
+        _ => None,
+    }
+}
 
 impl EcPrivateKey {
     pub fn generate(curve: Curve) -> Result<Self, MlsCryptoError> {
@@ -115,7 +167,7 @@ impl EcPrivateKey {
             Curve::Ed448 => {
                 let key = generate_ed448_key()?;
                 PrivateKeyValue::OpenSSL(key)
-            }
+            },
             _ => {
                 let key = AwsLcPrivateKey::generate(curve).map_err(|_| MlsCryptoError::CryptoError)?;
                 PrivateKeyValue::AwsLC(key)
@@ -130,7 +182,7 @@ impl EcPrivateKey {
             Curve::Ed448 => {
                 let key = ed448_private_key_from_bytes(bytes, true)?;
                 PrivateKeyValue::OpenSSL(key)
-            }
+            },
             _ => {
                 let key = AwsLcPrivateKey::from_bytes(bytes, curve).map_err(|_| MlsCryptoError::CryptoError)?;
                 PrivateKeyValue::AwsLC(key)
@@ -195,6 +247,21 @@ impl EcPublicKey {
         };
 
         Ok(Self { value, curve })
+    }
+
+    pub fn from_der(bytes: &[u8], curve: Curve) -> Result<Self, MlsCryptoError> {
+        let value = match curve {
+            Curve::Ed448 => {
+                let key = ed448_public_key_from_der(bytes).map_err(|_| MlsCryptoError::CryptoError)?;
+                PublicKeyValue::OpenSSL(key)
+            }
+            _ => {
+                let point = AwsLcPublicKey::from_bytes(bytes, curve).map_err(|_| MlsCryptoError::CryptoError)?;
+                PublicKeyValue::AwsLC(point)
+            }
+        };
+
+        Ok(Self { value, curve})
     }
 
     pub fn to_vec(&self) -> Result<Vec<u8>, MlsCryptoError> {
@@ -460,70 +527,7 @@ impl Drop for AwsLcPublicKey {
 
 
 
-#[derive(Clone, Default)]
-pub struct KeyPair {
-    pub public: Vec<u8>,
-    pub secret: Vec<u8>,
-}
 
-impl Debug for KeyPair {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("KeyPair")
-            .field("public", &mls_rs_core::debug::pretty_bytes(&self.public))
-            .finish()
-    }
-}
-
-fn pub_key_from_uncompressed_nist(bytes: &[u8], nid: Nid) -> Result<Ed448PublicKey, ErrorStack> {
-    let group = EcGroup::from_curve_name(nid)?;
-    let mut ctx = BigNumContext::new_secure()?;
-    let point = EcPoint::from_bytes(&group, bytes, &mut ctx)?;
-    let key = EcKey::from_public_key(&group, &point)?;
-
-    PKey::from_ec_key(key)
-}
-
-
-
-fn generate_pkey_with_nist_curve_id(nid: Nid) -> Result<Ed448PrivateKey, ErrorStack> {
-    let group = EcGroup::from_curve_name(nid)?;
-    let ec_key = EcKey::generate(&group)?;
-    PKey::from_ec_key(ec_key)
-}
-
-
-pub fn private_key_ecdh(
-    private_key: &Ed448PrivateKey,
-    remote_public: &Ed448PublicKey,
-) -> Result<Vec<u8>, ErrorStack> {
-    let mut ecdh_derive = Deriver::new(private_key)?;
-    ecdh_derive.set_peer(remote_public)?;
-    ecdh_derive.derive_to_vec()
-}
-
-pub fn curve_from_nid(nid: Nid) -> Option<Curve> {
-    match nid {
-        Nid::X9_62_PRIME256V1 => Some(Curve::P256),
-        Nid::SECP384R1 => Some(Curve::P384),
-        Nid::SECP521R1 => Some(Curve::P521),
-        _ => None,
-    }
-}
-
-pub fn curve_from_pkey<T: HasParams>(value: &PKey<T>) -> Option<Curve> {
-    match value.id() {
-        Id::X25519 => Some(Curve::X25519),
-        Id::ED25519 => Some(Curve::Ed25519),
-        Id::X448 => Some(Curve::X448),
-        Id::ED448 => Some(Curve::Ed448),
-        Id::EC => value
-            .ec_key()
-            .ok()
-            .and_then(|k| k.group().curve_name())
-            .and_then(curve_from_nid),
-        _ => None,
-    }
-}
 
 // too much has changed for the tests to work correctly, they will be fixed once the code is readable and working
 

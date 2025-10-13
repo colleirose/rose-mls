@@ -1,27 +1,26 @@
 // Copyright by contributors to this project.
 // SPDX-License-Identifier: MIT
 
-use std::{ffi::c_void, mem::MaybeUninit, ops::Deref, ptr::null_mut};
+use std::{ffi::c_void, mem::MaybeUninit, ops::Deref};
 
 use aws_lc_rs::{
  digest, error::Unspecified, signature::{self, UnparsedPublicKey, ED25519_PUBLIC_KEY_LEN}
 };
 use aws_lc_sys::EVP_PKEY_ED448;
-use openssl::{pkey::PKey, sign::Signer};
-//use aws_lc_sys::{EC_KEY_OpenSSL, NID_X9_62_prime256v1, NID_secp384r1, NID_secp521r1};
-use sec1::EcPrivateKey as Sec1PrivKey;
+use openssl::sign::Signer;
 
-use crate::{aws_lc_sys_impl::{
+use crate::aws_lc_sys_impl::{
     ECDSA_SIG_free, ECDSA_SIG_to_bytes, ECDSA_do_sign, ED25519_keypair, ED25519_sign,
-    EVP_PKEY_new_raw_private_key, EVP_PKEY_new_raw_public_key, OPENSSL_free,
+    EVP_PKEY_new_raw_private_key, OPENSSL_free,
     ED25519_PRIVATE_KEY_LEN, ED25519_SIGNATURE_LEN, EVP_PKEY_ED25519,
-}, ec::{AwsLcPrivateKey, Ed448PrivateKey, PrivateKeyValue, PublicKeyValue}, ed448};
+};
 use mls_rs_core::crypto::{CipherSuite, SignaturePublicKey, SignatureSecretKey};
 use mls_rs_crypto_traits::Curve;
 
+use crate::ec::{EcPrivateKey, EcPublicKey, EvpPkey, ec_generate, private_key_bytes_to_public, AwsLcPrivateKey, PrivateKeyValue, PublicKeyValue, SUPPORTED_NIST_CURVES};
+
 use crate::{
     check_non_null,
-    ec::{EcPrivateKey, EcPublicKey, EvpPkey, ec_generate, ec_public_key, curve_to_id, SUPPORTED_NIST_CURVES},
     MlsCryptoError,
 };
 
@@ -77,56 +76,19 @@ impl AwsLcEcdsa {
     pub(crate) fn evp_public_key(
         &self,
         key: &SignaturePublicKey,
-    ) -> Result<EvpPkey, MlsCryptoError> {
+    ) -> Result<PublicKeyValue, MlsCryptoError> {
         match self.0 {
-            Curve::Ed25519 => {
-                if key.len() != ED25519_PUBLIC_KEY_LEN {
-                    return Err(MlsCryptoError::InvalidKeyData);
-                }
-
-                unsafe {
-                    check_non_null(EVP_PKEY_new_raw_public_key(
-                        EVP_PKEY_ED25519,
-                        std::ptr::null_mut(),
-                        key.as_ptr(),
-                        key.len(),
-                    ))
-                    .map(EvpPkey)
-                }
-            }
             Curve::Ed448 => {
                 // TODO: set proper ED448 length checks later
-
-                // if key.len() != ED448_PUBLIC_KEY_LEN {
-                //     return Err(MlsCryptoError::InvalidKeyData);
-                // }
-
-                let pkey = openssl::pkey::PKey::public_key_from_raw_bytes(key.as_ref(), openssl::pkey::Id::ED448)
-                    .map_err(|_| MlsCryptoError::InvalidKeyData)?;
-                Ok(EvpPkey(PublicKeyValue::OpenSSL(pkey)))
-
-                // unsafe {
-                //     check_non_null(EVP_PKEY_new_raw_public_key(
-                //         EVP_PKEY_ED448,
-                //         std::ptr::null_mut(),
-                //         key.as_ptr(),
-                //         key.len(),
-                //     ))
-                //     .map(EvpPkey)
-                // }
+                let pkey = openssl::pkey::PKey::public_key_from_raw_bytes(
+                    key.as_ref(),
+                    openssl::pkey::Id::ED448
+                ).map_err(|_| MlsCryptoError::InvalidKeyData)?;
+                Ok(PublicKeyValue::OpenSSL(pkey))
             }
             _ => {
                 let ec_key = EcPublicKey::from_bytes(key, self.0)?;
-                match ec_key.value {
-                    PublicKeyValue::AwsLC(inner) => {
-                        inner.try_into().map_err(|_| MlsCryptoError::CryptoError)
-                    }
-                    PublicKeyValue::OpenSSL(_) => {
-                        // OpenSSL keys should only be used for Ed448
-                        // TODO: This might not be needed
-                        Err(MlsCryptoError::InvalidKeyData)
-                    }
-                }
+                Ok(ec_key.value)
             }
         }
     }
@@ -195,7 +157,7 @@ impl AwsLcEcdsa {
         let public = if self.0 == Curve::Ed25519 {
             ed25519_public_key(secret_key)
         } else {
-            ec_public_key(self.0, secret_key)
+            private_key_bytes_to_public(self.0, secret_key)
         }?;
 
         Ok(public.into())

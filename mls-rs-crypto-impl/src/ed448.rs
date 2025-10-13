@@ -31,6 +31,10 @@ pub fn ed448_private_key_from_der(data: &[u8]) -> Result<Ed448PrivateKey, ErrorS
     PKey::private_key_from_der(data)
 }
 
+pub fn ed448_public_key_from_der(data: &[u8]) -> Result<Ed448PublicKey, ErrorStack> {
+    PKey::public_key_from_der(data)
+}
+
 // #[derive(Clone, Default)]
 // pub struct KeyPair {
 //     pub public: Vec<u8>,

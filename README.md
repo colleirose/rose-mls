@@ -1,8 +1,10 @@
 A work-in-progress MLS implementation with support for all ciphersuites. 
 
-The code doesn't work and isn't tested, it's just here as a reference/draft to keep working on. 
+The code doesn't work and isn't tested, it's just here as a reference/draft to keep working on.
 
 We use OpenSSL for Ed448, while everything else uses RustCrypto and aws-lc. We generally prefer to implement most of the protocol in Rust when we can, while using aws-lc and OpenSSL for the rest.
+
+Current code is very messy, we will need to migrate the x509.rs from OpenSSL to aws-lc but it's kept as it currently is so that it works as a placeholder.
 
 Inspiration from:
 - https://github.com/awslabs/mls-rs/ (used as a base for this code, most of the mls-rs code is still in this repository)
@@ -10,7 +12,7 @@ Inspiration from:
 
 TODO:
 - Make code work correctly
-- Cleanup code
+- Cleanup code 
 - Use RustCrypto for more of the cryptography
 - Fix the test cases
 - Performance benchmarking and optimization

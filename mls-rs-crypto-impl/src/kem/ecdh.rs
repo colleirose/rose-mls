@@ -8,7 +8,7 @@ use mls_rs_core::crypto::{CipherSuite, HpkePublicKey, HpkeSecretKey};
 use mls_rs_crypto_traits::{Curve, SamplingMethod};
 
 use crate::{
-    ec::{ec_generate, ec_public_key, EcPrivateKey, EcPublicKey, SUPPORTED_NIST_CURVES},
+    ec::{ec_generate, private_key_bytes_to_public, EcPrivateKey, EcPublicKey, SUPPORTED_NIST_CURVES},
     MlsCryptoError,
 };
 
@@ -71,7 +71,7 @@ impl mls_rs_crypto_traits::DhType for Ecdh {
         let public = if self.curve == Curve::X25519 {
             x25519_public_key(secret_key)
         } else {
-            ec_public_key(self.curve, secret_key)
+            private_key_bytes_to_public(self.curve, secret_key)
         }?;
 
         Ok(public.into())

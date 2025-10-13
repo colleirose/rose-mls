@@ -8,6 +8,7 @@ mod hmac;
 mod kdf;
 mod kem;
 mod ed448;
+mod ec_signer;
 
 pub mod x509;
 
