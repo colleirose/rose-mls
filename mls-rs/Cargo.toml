@@ -122,9 +122,9 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mls_build_async)', 'cfg(co
 name = "basic_usage"
 required-features = []
 
-[[example]]
-name = "x509"
-required-features = ["x509"]
+# [[example]]
+# name = "x509"
+# required-features = ["x509"]
 
 [[example]]
 name = "large_group"

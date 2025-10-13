@@ -4,7 +4,6 @@ resolver = "2"
 members = [
     "mls-rs",
     "mls-rs-core",
-    "mls-rs-ffi",
     "mls-rs-identity-x509",
     "mls-rs/test_harness_integration",
     "mls-rs-crypto-impl",
@@ -19,7 +18,6 @@ members = [
 default-members = [
     "mls-rs",
     "mls-rs-core",
-    "mls-rs-ffi",
     "mls-rs-identity-x509",
     "mls-rs-crypto-hpke",
     "mls-rs-crypto-impl",

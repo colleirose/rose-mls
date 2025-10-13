@@ -28,29 +28,23 @@ pub fn generate_ed448_key() -> Result<Ed448PrivateKey, EcError> {
 //     Ok(KeyPair { public, secret })
 // }
 
-
-pub fn ed448_curve_from_private_key(key: &Ed448PrivateKey) -> Option<Curve> {
-    curve_from_pkey(key)
-    
-}
 pub fn ed448_private_key_from_der(data: &[u8]) -> Result<Ed448PrivateKey, ErrorStack> {
     PKey::private_key_from_der(data)
 }
 
+// #[derive(Clone, Default)]
+// pub struct KeyPair {
+//     pub public: Vec<u8>,
+//     pub secret: Vec<u8>,
+// }
 
-#[derive(Clone, Default)]
-pub struct KeyPair {
-    pub public: Vec<u8>,
-    pub secret: Vec<u8>,
-}
-
-impl Debug for KeyPair {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("KeyPair")
-            .field("public", &mls_rs_core::debug::pretty_bytes(&self.public))
-            .finish()
-    }
-}
+// impl Debug for KeyPair {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         f.debug_struct("KeyPair")
+//             .field("public", &mls_rs_core::debug::pretty_bytes(&self.public))
+//             .finish()
+//     }
+// }
 
 fn openssl_pub_key_from_uncompressed_nist(bytes: &[u8], nid: Nid) -> Result<Ed448PublicKey, ErrorStack> {
     let group = EcGroup::from_curve_name(nid)?;
@@ -86,13 +80,6 @@ pub fn ed448_pub_key_to_uncompressed(key: &Ed448PublicKey) -> Result<Vec<u8>, Er
         key.raw_public_key()
     }
 }
-
-fn generate_pkey_with_nist_curve_id(nid: Nid) -> Result<Ed448PrivateKey, ErrorStack> {
-    let group = EcGroup::from_curve_name(nid)?;
-    let ec_key = EcKey::generate(&group)?;
-    PKey::from_ec_key(ec_key)
-}
-
 
 fn private_key_from_bytes_nist(
     bytes: &[u8],
@@ -160,13 +147,14 @@ pub fn ed448_private_key_from_bytes(
 }
 
 pub fn ed448_private_key_to_bytes(key: &Ed448PrivateKey) -> Result<Vec<u8>, ErrorStack> {
-    if let Ok(ec_key) = key.ec_key() {
-        Ok(ec_key.private_key().to_vec())
-    } else if [Some(Curve::X25519), Some(Curve::X448)].contains(&ed448_curve_from_private_key(key)) {
-        key.raw_private_key()
-    } else {
-        Ok([key.raw_private_key()?, key.raw_public_key()?].concat())
-    }
+    key.raw_private_key()
+    // if let Ok(ec_key) = key.ec_key() {
+    //     Ok(ec_key.private_key().to_vec())
+    // } else if [Some(Curve::X25519), Some(Curve::X448)].contains(&ed448_curve_from_private_key(key)) {
+    //     key.raw_private_key()
+    // } else {
+    //     Ok([key.raw_private_key()?, key.raw_public_key()?].concat())
+    // }
 }
 
 pub fn ed448_private_key_bytes_to_public(secret_key: &[u8]) -> Result<Vec<u8>, EcError> {
@@ -192,28 +180,4 @@ pub fn private_key_ecdh(
     let mut ecdh_derive = Deriver::new(private_key)?;
     ecdh_derive.set_peer(remote_public)?;
     ecdh_derive.derive_to_vec()
-}
-
-pub fn curve_from_nid(nid: Nid) -> Option<Curve> {
-    match nid {
-        Nid::X9_62_PRIME256V1 => Some(Curve::P256),
-        Nid::SECP384R1 => Some(Curve::P384),
-        Nid::SECP521R1 => Some(Curve::P521),
-        _ => None,
-    }
-}
-
-pub fn curve_from_pkey<T: HasParams>(value: &PKey<T>) -> Option<Curve> {
-    match value.id() {
-        Id::X25519 => Some(Curve::X25519),
-        Id::ED25519 => Some(Curve::Ed25519),
-        Id::X448 => Some(Curve::X448),
-        Id::ED448 => Some(Curve::Ed448),
-        Id::EC => value
-            .ec_key()
-            .ok()
-            .and_then(|k| k.group().curve_name())
-            .and_then(curve_from_nid),
-        _ => None,
-    }
 }

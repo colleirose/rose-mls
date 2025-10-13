@@ -130,8 +130,8 @@ pub fn ecdh(
             ECDH_compute_key(
                 secret_buf.as_mut_ptr() as *mut c_void,
                 secret_buf.len(),
-                aws_lc_public_key.inner,       // assumes you expose `.inner` for AwsLcPublicKey or match
-                aws_lc_secret_key.inner,      // same for AwsLcPrivateKey
+                aws_lc_public_key.inner,
+                aws_lc_secret_key.inner,
                 None,
             )
         };
