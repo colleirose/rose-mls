@@ -72,15 +72,7 @@ pub struct EcPrivateKey {
     pub(crate) curve: Curve,
 }
 
-// pub fn id_to_curve(id: Id) -> Result<Curve, EcError> {
-//     match id.as_raw() {
-//         NID_X9_62_prime256v1 => Ok(Curve::P256),
-//         NID_secp384r1 => Ok(Curve::P384),
-//         NID_secp521r1 => Ok(Curve::P521),
-//         _ => Err(EcError::UnsupportedCipherSuite),
-//     }
-// }
-
+#[inline]
 pub fn curve_to_id(c: Curve) -> Result<Id, EcError> {
     match c {
         Curve::P256 | Curve::P384 | Curve::P521 => Ok(Id::EC),
@@ -92,6 +84,7 @@ pub fn curve_to_id(c: Curve) -> Result<Id, EcError> {
     }
 }
 
+#[inline]
 pub fn nist_curve_id(curve: Curve) -> Option<i32> {
     match curve {
         Curve::P256 => Some(NID_X9_62_prime256v1),
@@ -101,6 +94,8 @@ pub fn nist_curve_id(curve: Curve) -> Option<i32> {
     }
 }
 
+// TODO this is duplicative, unsure if still used
+#[inline]
 pub fn ec_public_key(curve: Curve, secret_key: &[u8]) -> Result<Vec<u8>, MlsCryptoError> {
     Ok(EcPrivateKey::from_bytes(secret_key, curve)?
         .public_key()?
@@ -119,7 +114,7 @@ impl EcPrivateKey {
     pub fn generate(curve: Curve) -> Result<Self, MlsCryptoError> {
         let value = match curve {
             Curve::Ed448 => {
-                let key = generate_ed448_key()?; // OpenSSL
+                let key = generate_ed448_key()?;
                 PrivateKeyValue::OpenSSL(key)
             }
             _ => {
