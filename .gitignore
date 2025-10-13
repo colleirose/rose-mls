@@ -1,6 +1,5 @@
 /target
 Cargo.lock
 .idea
-.vscode
 rust-toolchain.toml
 **.swp
