@@ -1,7 +1,7 @@
 // Copyright by contributors to this project.
 // SPDX-License-Identifier: MIT
 
-use std::{ffi::c_void, mem::MaybeUninit, ops::Deref};
+use std::{ffi::c_void, mem::MaybeUninit, ops::Deref, ptr::null_mut};
 
 use aws_lc_rs::{
  digest, error::Unspecified, signature::{self, UnparsedPublicKey, ED25519_PUBLIC_KEY_LEN}
@@ -11,7 +11,7 @@ use openssl::sign::Signer;
 
 use crate::aws_lc_sys_impl::{
     ECDSA_SIG_free, ECDSA_SIG_to_bytes, ECDSA_do_sign, ED25519_keypair, ED25519_sign,
-    EVP_PKEY_new_raw_private_key, OPENSSL_free,
+    EVP_PKEY_new_raw_private_key, EVP_PKEY_new_raw_public_key, OPENSSL_free,
     ED25519_PRIVATE_KEY_LEN, ED25519_SIGNATURE_LEN, EVP_PKEY_ED25519,
 };
 use mls_rs_core::crypto::{CipherSuite, SignaturePublicKey, SignatureSecretKey};
@@ -114,7 +114,6 @@ impl AwsLcEcdsa {
                     .map(EvpPkey)
                 }
             }
-
             Curve::Ed448 => {
                 // TODO: set proper ED448 length checks later
 
@@ -132,7 +131,6 @@ impl AwsLcEcdsa {
                     .map(EvpPkey)
                 }
             }
-
             _ => {
                 let ec_key = EcPrivateKey::from_bytes(key, self.0)?;
                 match ec_key.value {

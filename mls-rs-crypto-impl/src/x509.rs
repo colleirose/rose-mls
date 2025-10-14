@@ -4,6 +4,7 @@ mod parser;
 mod request;
 mod validator;
 mod writer;
+mod pkey_util;
 
 pub use certificate::Certificate;
 pub use component::{X509Extension, X509ExtensionContext};

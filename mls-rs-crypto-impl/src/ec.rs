@@ -3,14 +3,11 @@
 
 use core::fmt::{self, Debug};
 use std::ptr::null_mut;
-use aws_lc_sys::{EVP_PKEY_CTX_free, EVP_PKEY_CTX_new_id, EVP_PKEY_keygen, EVP_PKEY_keygen_init, EVP_PKEY_ED25519};
 use mls_rs_crypto_traits::Curve;
 use thiserror::Error;
 
 use openssl::{
-    bn::{BigNum, BigNumContext},
     derive::Deriver,
-    ec::{EcGroup, EcKey, EcPoint, PointConversionForm},
     error::ErrorStack,
     nid::Nid,
     pkey::{HasParams, Id, PKey, Private, Public},
@@ -40,37 +37,49 @@ pub enum EcError {
 
 pub(crate) const SUPPORTED_NIST_CURVES: [Curve; 3] = [Curve::P521, Curve::P256, Curve::P384];
 
-pub type Ed448PublicKey = PKey<Public>;
-pub type Ed448PrivateKey = PKey<Private>;
 pub struct EvpPkey(pub(crate) *mut EVP_PKEY);
-pub struct AwsLcPrivateKey {
-    pub(crate) inner: *mut crate::aws_lc_sys_impl::ec_key_st,
-    curve: Curve,
-}
-pub struct AwsLcPublicKey {
-    pub(crate) inner: *mut EC_POINT,
-    curve: Curve,
-}
-
-pub enum PublicKeyValue {
-    AwsLC(AwsLcPublicKey),
-    OpenSSL(Ed448PublicKey),
-}
-
-pub enum PrivateKeyValue {
-    AwsLC(AwsLcPrivateKey),
-    OpenSSL(Ed448PrivateKey),
-}
+pub type PKeyPublic = PKey<Public>; 
+pub type PKeyPrivate = PKey<Private>;
 
 pub struct EcPublicKey {
     pub(crate) value: PublicKeyValue,
-    pub(crate)curve: Curve,
+    pub(crate) curve: Curve,
 }
 
 pub struct EcPrivateKey {
     pub(crate) value: PrivateKeyValue,
     pub(crate) curve: Curve,
 }
+
+// TODO: this code is a disaster
+// too many types duplicate each other, so much code is duplicated
+// needs to be worked on
+pub enum KeyBackend {
+    AwsLC, // EC_POINT type
+    OpenSSL, // only the PKey type, for ed448
+    AwsLcPKey, // PKey but passed to AWS-LC
+}
+
+pub enum PrivateKeyValue {
+    AwsLC(AwsLcPrivateKey),
+    OpenSSL(PKeyPrivate),
+}
+
+pub enum PublicKeyValue {
+    AwsLC(AwsLcPublicKey),
+    OpenSSL(PKeyPublic),
+}
+
+pub struct AwsLcPrivateKey {
+    pub(crate) inner: *mut crate::aws_lc_sys_impl::ec_key_st,
+    curve: Curve,
+}
+
+pub struct AwsLcPublicKey {
+    pub(crate) inner: *mut EC_POINT,
+    curve: Curve,
+}
+
 
 #[inline]
 pub fn curve_to_id(c: Curve) -> Result<Id, EcError> {
@@ -129,8 +138,8 @@ impl Debug for KeyPair {
 }
 
 pub fn private_key_ecdh(
-    private_key: &Ed448PrivateKey,
-    remote_public: &Ed448PublicKey,
+    private_key: &PKeyPrivate,
+    remote_public: &PKeyPublic,
 ) -> Result<Vec<u8>, ErrorStack> {
     let mut ecdh_derive = Deriver::new(private_key)?;
     ecdh_derive.set_peer(remote_public)?;
@@ -426,8 +435,8 @@ impl TryInto<EvpPkey> for AwsLcPrivateKey {
 }
 
 impl AwsLcPublicKey {
-  pub fn from_bytes(bytes: &[u8], curve: Curve) -> Result<Self, Unspecified> {
-        let nid = nist_curve_id(curve).ok_or(Unspecified)?;
+  pub fn from_bytes(bytes: &[u8], curve: Curve) -> Result<Self, MlsCryptoError> {
+        let nid = nist_curve_id(curve).ok_or(MlsCryptoError::InvalidKeyData)?;
 
         unsafe {
             let group = EC_GROUP_new_by_curve_name(nid);
@@ -437,7 +446,7 @@ impl AwsLcPublicKey {
             if 1 != EC_POINT_oct2point(group, point, bytes.as_ptr(), bytes.len(), null_mut()) {
                 EC_GROUP_free(group);
                 EC_POINT_free(point);
-                return Err(Unspecified);
+                return Err(MlsCryptoError::CryptoError);
             }
 
             EC_GROUP_free(group);
@@ -523,11 +532,6 @@ impl Drop for AwsLcPublicKey {
         unsafe { EC_POINT_free(self.inner) }
     }
 }
-
-
-
-
-
 
 // too much has changed for the tests to work correctly, they will be fixed once the code is readable and working
 

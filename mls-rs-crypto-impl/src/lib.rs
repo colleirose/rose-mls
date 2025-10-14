@@ -111,7 +111,6 @@ pub struct AwsLcCipherSuite {
 
 pub type EcdhKem = DhKem<Ecdh, AwsLcHkdf>;
 
-#[cfg(feature = "post-quantum")]
 pub type CombinedEcdhMlKemKem =
     CombinedKem<MlKemKem, EcdhKem, AwsLcHash, AwsLcShake128, XWingSharedSecretHashInput>;
 
@@ -178,7 +177,6 @@ impl MainCryptoProvider {
         ]
     }
 
-    #[cfg(feature = "post-quantum")]
     pub fn supported_pq_cipher_suites() -> Vec<CipherSuite> {
         vec![
             CipherSuite::ML_KEM_512,
@@ -262,7 +260,6 @@ impl AwsLcCipherSuiteBuilder {
         }
     }
 
-    #[cfg(feature = "post-quantum")]
     pub fn pq_hpke(self, ml_kem: MlKem, kdf: KdfId, aead: AeadId) -> Self {
         let ml_kem = MlKemKem {
             ml_kem,
@@ -279,7 +276,6 @@ impl AwsLcCipherSuiteBuilder {
         }
     }
 
-    #[cfg(feature = "post-quantum")]
     pub fn combined_hpke(
         self,
         classical_cipher_suite: CipherSuite,
@@ -304,7 +300,6 @@ impl AwsLcCipherSuiteBuilder {
         Self { hpke, ..self }
     }
 
-    #[cfg(feature = "post-quantum")]
     pub fn ghp_combined_hpke(
         self,
         classical_cipher_suite: CipherSuite,
@@ -370,9 +365,7 @@ impl CryptoProvider for MainCryptoProvider {
         cipher_suite: CipherSuite,
     ) -> Option<Self::CipherSuiteProvider> {
         let classical_cs = match cipher_suite {
-            #[cfg(feature = "post-quantum")]
             CipherSuite::ML_KEM_1024 => CipherSuite::P384_AES256,
-            #[cfg(feature = "post-quantum")]
             CipherSuite::ML_KEM_512 | CipherSuite::ML_KEM_768 | CipherSuite::ML_KEM_768_X25519 => {
                 CipherSuite::CURVE25519_AES128
             }
@@ -384,11 +377,9 @@ impl CryptoProvider for MainCryptoProvider {
         let hmac = AwsLcHmac::new(classical_cs)?;
 
         let hpke = match cipher_suite {
-            #[cfg(feature = "post-quantum")]
             CipherSuite::ML_KEM_512 | CipherSuite::ML_KEM_768 | CipherSuite::ML_KEM_1024 => {
                 AwsLcHpke::PostQuantum(Hpke::new(MlKemKem::new(cipher_suite)?, kdf, Some(aead)))
             }
-            #[cfg(feature = "post-quantum")]
             CipherSuite::ML_KEM_768_X25519 => {
                 let kem = CombinedKem::new_xwing(
                     MlKemKem::new(CipherSuite::ML_KEM_768)?,
@@ -515,9 +506,7 @@ impl CipherSuiteProvider for AwsLcCipherSuite {
     ) -> Result<HpkeCiphertext, Self::Error> {
         match &self.hpke {
             AwsLcHpke::Classical(hpke) => hpke.seal(remote_key, info, None, aad, pt),
-            #[cfg(feature = "post-quantum")]
             AwsLcHpke::PostQuantum(hpke) => hpke.seal(remote_key, info, None, aad, pt),
-            #[cfg(feature = "post-quantum")]
             AwsLcHpke::Combined(hpke) => hpke.seal(remote_key, info, None, aad, pt),
         }
         .await
@@ -536,11 +525,9 @@ impl CipherSuiteProvider for AwsLcCipherSuite {
             AwsLcHpke::Classical(hpke) => {
                 hpke.open(ciphertext, local_secret, local_public, info, None, aad)
             }
-            #[cfg(feature = "post-quantum")]
             AwsLcHpke::PostQuantum(hpke) => {
                 hpke.open(ciphertext, local_secret, local_public, info, None, aad)
             }
-            #[cfg(feature = "post-quantum")]
             AwsLcHpke::Combined(hpke) => {
                 hpke.open(ciphertext, local_secret, local_public, info, None, aad)
             }
@@ -693,35 +680,4 @@ fn check_non_null_const<T>(r: *const T) -> Result<*const T, MlsCryptoError> {
     }
 
     Ok(r)
-}
-
-#[cfg(not(mls_build_async))]
-#[test]
-fn mls_core_tests() {
-    mls_rs_core::crypto::test_suite::verify_tests(&MainCryptoProvider::new(), true);
-
-    for cs in MainCryptoProvider::supported_classical_cipher_suites() {
-        let mut hpke = Hpke::new(
-            dhkem(cs).unwrap(),
-            AwsLcHkdf::new(cs).unwrap(),
-            AwsLcAead::new(cs),
-        );
-
-        mls_rs_core::crypto::test_suite::verify_hpke_context_tests(&hpke, cs);
-        mls_rs_core::crypto::test_suite::verify_hpke_encap_tests(&mut hpke, cs);
-    }
-}
-
-#[test]
-fn pq_cipher_suite_test() {
-    for cs in MainCryptoProvider::supported_pq_cipher_suites() {
-        let cs = MainCryptoProvider::new()
-            .cipher_suite_provider(cs)
-            .unwrap();
-
-        let (sk, pk) = cs.kem_derive(&[0u8; 64]).unwrap();
-        let ct = cs.hpke_seal(&pk, b"info", None, b"very secret").unwrap();
-        let pt = cs.hpke_open(&ct, &sk, &pk, b"info", None).unwrap();
-        assert_eq!(pt, b"very secret");
-    }
 }

@@ -8,21 +8,23 @@ use std::{
     time::Duration,
 };
 
-use crate::aws_lc_sys_impl::{
+use crate::{aws_lc_sys_impl::{
     d2i_X509, i2d_X509, i2d_X509_NAME, ASN1_INTEGER_free, ASN1_INTEGER_to_BN, ASN1_TIME_free,
     ASN1_TIME_new, ASN1_TIME_set_posix, ASN1_TIME_to_posix, BN_bin2bn, BN_bn2bin, BN_free,
     BN_num_bytes, BN_to_ASN1_INTEGER, EC_KEY_get0_group, EC_KEY_get0_public_key,
     EC_POINT_point2oct, EVP_PKEY_free, EVP_PKEY_get0_EC_KEY, EVP_PKEY_get_raw_public_key,
-    NID_subject_alt_name, X509V3_set_ctx, X509_EXTENSION_dup, X509_add_ext, X509_free,
+    EVP_PKEY_new_raw_public_key, NID_subject_alt_name, X509V3_set_ctx, X509_EXTENSION_dup, X509_add_ext, X509_free,
     X509_get0_notAfter, X509_get0_notBefore, X509_get_ext, X509_get_ext_count, X509_get_ext_d2i,
     X509_get_issuer_name, X509_get_pubkey, X509_get_serialNumber, X509_get_subject_name, X509_new,
     X509_set_issuer_name, X509_set_notAfter, X509_set_notBefore, X509_set_pubkey,
     X509_set_serialNumber, X509_set_subject_name, X509_set_version, X509_sign, ASN1_TIME, X509,
-};
+}, ec::{AwsLcPublicKey, EvpPkey}, x509::pkey_util::evp_public_key};
+use aws_lc_sys::EVP_PKEY_ED25519;
 use mls_rs_core::{
     crypto::{CipherSuite, SignaturePublicKey, SignatureSecretKey},
     time::MlsTime,
 };
+use mls_rs_crypto_traits::Curve;
 use mls_rs_identity_x509::{DerCertificate, SubjectAltName, SubjectComponent};
 
 use crate::{
@@ -78,8 +80,8 @@ impl Certificate {
         cipher_suite: CipherSuite,
         key: &SignaturePublicKey,
     ) -> Result<(), MlsCryptoError> {
-        let util = AwsLcEcdsa::new(cipher_suite).ok_or(MlsCryptoError::UnsupportedCipherSuite)?;
-        let signature_key = util.evp_public_key(key)?;
+        let curve = Curve::from_ciphersuite(cipher_suite, true).ok_or(MlsCryptoError::InvalidKeyData)?;
+        let signature_key = evp_public_key(key, curve)?;
 
         unsafe { check_res(X509_set_pubkey(self.0, signature_key.0)) }
     }
@@ -349,4 +351,94 @@ unsafe fn posix_to_asn1_time(time: MlsTime) -> Result<*mut ASN1_TIME, MlsCryptoE
     }
 
     Ok(asn1_time)
+}
+
+#[cfg(test)]
+mod tests {
+    use mls_rs_core::{crypto::CipherSuite, time::MlsTime};
+    use mls_rs_identity_x509::{
+        CertificateChain, SubjectAltName, SubjectComponent, X509CredentialValidator,
+    };
+
+    use crate::{
+        ecdsa::AwsLcEcdsa,
+        x509::{
+            component::{KeyUsage, X509Extension},
+            test_utils::{test_root_ca, test_root_ca_key},
+            CertificateValidator,
+        },
+    };
+
+    use super::Certificate;
+
+    #[test]
+    fn build_certificate() {
+        let ca_key = test_root_ca_key();
+        let ca_cert = Certificate::try_from(&test_root_ca()).unwrap();
+
+        let signer = AwsLcEcdsa::new(CipherSuite::P384_AES256).unwrap();
+        let (_, public_key) = signer.signature_key_generate().unwrap();
+
+        let subject = vec![SubjectComponent::CommonName("test".to_string())];
+        let serial = vec![1, 2, 3];
+        let not_before = MlsTime::from(3);
+        let not_after = MlsTime::from(5);
+
+        let mut new_cert = Certificate::new().unwrap();
+
+        new_cert
+            .set_issuer(&ca_cert.subject_components().unwrap())
+            .unwrap();
+
+        new_cert.set_subject(&subject).unwrap();
+        new_cert.set_serial_number(&serial).unwrap();
+
+        new_cert
+            .set_public_key(CipherSuite::P384_AES256, &public_key)
+            .unwrap();
+
+        new_cert.set_not_before(not_before).unwrap();
+        new_cert.set_not_after(not_after).unwrap();
+
+        let mut ext_context = new_cert.extension_ctx(&ca_cert);
+
+        let extensions = vec![
+            X509Extension::key_usage(false, &[KeyUsage::KeyCertSign]).unwrap(),
+            X509Extension::basic_constraints(false, false, None).unwrap(),
+            X509Extension::subject_alt_name(&[SubjectAltName::Dns("example.org".to_string())])
+                .unwrap(),
+            X509Extension::authority_key_identifier(&mut ext_context, false, true, true).unwrap(),
+            X509Extension::subject_key_identifier(&mut ext_context, false).unwrap(),
+        ];
+
+        extensions
+            .iter()
+            .for_each(|ext| new_cert.add_extension(ext).unwrap());
+
+        new_cert
+            .sign(CipherSuite::CURVE25519_AES128, &ca_key)
+            .unwrap();
+
+        let serialized = new_cert.to_der().unwrap();
+
+        // Validate we can read everything that was previously written
+        let restored = Certificate::try_from(&serialized).unwrap();
+        assert_eq!(restored.subject_components().unwrap(), subject);
+        assert_eq!(restored.serial_number().unwrap(), serial);
+        assert_eq!(restored.public_key().unwrap(), public_key);
+        assert_eq!(restored.not_before().unwrap(), not_before);
+        assert_eq!(restored.not_after().unwrap(), not_after);
+
+        assert_eq!(restored.extensions().unwrap(), extensions);
+
+        assert_eq!(
+            restored.issuer().unwrap(),
+            ca_cert.subject_components().unwrap()
+        );
+
+        // The resulting cert should pass validation
+        let validator = CertificateValidator::new(vec![ca_cert]).unwrap();
+        let chain = CertificateChain::from(vec![restored.to_der().unwrap()]);
+        validator.validate_chain(&chain, None).unwrap();
+    }
 }
