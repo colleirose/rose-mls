@@ -10,7 +10,7 @@ use openssl::{
     ec::{EcGroup, EcKey, EcPoint, PointConversionForm},
     error::ErrorStack,
     nid::Nid,
-    pkey::{HasParams, Id, PKey, Private, Public},
+    pkey::{Id, PKey},
 };
 
 use crate::ec::{curve_to_id, nist_curve_id, EcError, Ed448PrivateKey, Ed448PublicKey};

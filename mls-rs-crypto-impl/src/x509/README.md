@@ -1,0 +1,1 @@
+The OpenSSL folder is used for Ed448 keys, while the aws-lc folder is used for other keys.

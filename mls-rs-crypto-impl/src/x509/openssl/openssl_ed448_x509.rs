@@ -13,7 +13,6 @@ use mls_rs_identity_x509::{
     SubjectComponent, SubjectIdentityExtractor, X509CredentialValidator, X509IdentityProvider,
     X509RequestWriter,
 };
-
 use openssl::{
     bn::BigNumContext,
     ec::PointConversionForm,
@@ -507,336 +506,334 @@ fn looks_like_der(data: &[u8]) -> bool {
     data.starts_with(&[0x30])
 }
 
-// TODO: fix tests
-
-// #[cfg(test)]
-// pub(crate) mod test_utils {
-//     use mls_rs_identity_x509::{CertificateChain, DerCertificate};
-
-//     pub fn load_test_ca() -> DerCertificate {
-//         DerCertificate::from(include_bytes!("../test_data/x509/ca.der").to_vec())
-//     }
-
-//     pub fn load_another_ca() -> DerCertificate {
-//         DerCertificate::from(include_bytes!("../test_data/x509/another_ca.der").to_vec())
-//     }
-
-//     pub fn load_github_leaf() -> DerCertificate {
-//         DerCertificate::from(include_bytes!("../test_data/x509/github_leaf.der").to_vec())
-//     }
-
-//     pub fn load_ip_cert() -> DerCertificate {
-//         DerCertificate::from(include_bytes!("../test_data/x509/cert_ip.der").to_vec())
-//     }
-
-//     pub fn load_test_cert_chain() -> CertificateChain {
-//         let entry0 = include_bytes!("../test_data/x509/leaf.der").to_vec();
-//         let entry1 = include_bytes!("../test_data/x509/intermediate.der").to_vec();
-//         let entry2 = include_bytes!("../test_data/x509/ca.der").to_vec();
-
-//         CertificateChain::from_iter(
-//             [entry0, entry1, entry2]
-//                 .into_iter()
-//                 .map(DerCertificate::from),
-//         )
-//     }
-
-//     pub fn load_test_system_cert_chain() -> CertificateChain {
-//         let entry0 = include_bytes!("../test_data/x509/github_leaf.der").to_vec();
-//         let entry1 = include_bytes!("../test_data/x509/github_intermediate.der").to_vec();
-
-//         CertificateChain::from_iter([entry0, entry1].into_iter().map(DerCertificate::from))
-//     }
-
-//     pub fn load_test_invalid_chain() -> CertificateChain {
-//         let entry0 = include_bytes!("../test_data/x509/github_leaf.der").to_vec();
-//         let entry1 = include_bytes!("../test_data/x509/intermediate.der").to_vec();
-
-//         CertificateChain::from_iter([entry0, entry1].into_iter().map(DerCertificate::from))
-//     }
-
-//     pub fn load_test_invalid_ca_chain() -> CertificateChain {
-//         let entry0 = include_bytes!("../test_data/x509/leaf.der").to_vec();
-//         let entry1 = include_bytes!("../test_data/x509/intermediate.der").to_vec();
-//         let entry2 = include_bytes!("../test_data/x509/another_ca.der").to_vec();
-
-//         CertificateChain::from_iter(
-//             [entry0, entry1, entry2]
-//                 .into_iter()
-//                 .map(DerCertificate::from),
-//         )
-//     }
-// }
-
-// #[cfg(test)]
-// mod tests {
-//     use std::time::Duration;
-
-//     use assert_matches::assert_matches;
-//     use mls_rs_core::{
-//         crypto::{CipherSuite, SignaturePublicKey, SignatureSecretKey},
-//         time::MlsTime,
-//     };
-//     use mls_rs_identity_x509::{
-//         CertificateChain, CertificateRequestParameters, DerCertificateRequest, SubjectAltName,
-//         SubjectComponent, X509CertificateReader, X509RequestWriter,
-//     };
-//     use openssl::{
-//         pkey::PKey,
-//         x509::{X509Name, X509Req, X509},
-//     };
-
-//     use crate::{
-//         ec::private_key_to_bytes,
-//         x509::{
-//             test_utils::{load_another_ca, load_test_invalid_ca_chain, load_test_invalid_chain},
-//             CertificateRequestWriter,
-//         },
-//     };
-
-//     use super::{
-//         pub_key_to_uncompressed,
-//         test_utils::{
-//             load_github_leaf, load_ip_cert, load_test_ca, load_test_cert_chain,
-//             load_test_system_cert_chain,
-//         },
-//         X509Error, X509Reader, X509Validator,
-//     };
-
-//     #[test]
-//     fn can_detect_invalid_ca_certificates() {
-//         assert_matches!(
-//             X509Validator::new(vec![vec![0u8; 32].into()]),
-//             Err(X509Error::InvalidCertificateData)
-//         )
-//     }
-
-//     #[test]
-//     fn can_detect_ca_cert_with_invalid_self_signed_signature() {
-//         let test_cert = load_test_cert_chain()[0].clone();
-
-//         assert_matches!(
-//             X509Validator::new(vec![test_cert]),
-//             Err(X509Error::NonSelfSignedCa)
-//         )
-//     }
-
-//     #[test]
-//     fn can_validate_cert_chain() {
-//         let chain = load_test_cert_chain();
-
-//         let validator = X509Validator::new(vec![load_test_ca()]).unwrap();
-//         let system_validator = X509Validator::new(vec![]).unwrap().with_system_ca();
-
-//         validator
-//             .validate_chain(&chain, Some(MlsTime::now()))
-//             .unwrap();
-
-//         assert_matches!(
-//             system_validator.validate_chain(&chain, None),
-//             Err(X509Error::ChainValidationFailure(_))
-//         )
-//     }
-
-//     #[test]
-//     fn will_fail_on_empty_chain() {
-//         let validator = X509Validator::new(vec![]).unwrap();
-//         let empty: Vec<Vec<u8>> = Vec::new();
-
-//         let res = validator.validate_chain(&CertificateChain::from(empty), Some(MlsTime::now()));
-
-//         assert_matches!(res, Err(X509Error::EmptyCertificateChain));
-//     }
-
-//     #[test]
-//     fn can_validate_against_system_ca_list() {
-//         let chain = load_test_system_cert_chain();
-
-//         let plain_validator = X509Validator::new(vec![load_test_ca()]).unwrap();
-//         let system_validator = X509Validator::new(vec![]).unwrap().with_system_ca();
-
-//         // Some time in late 2022 (almost 53 years since 1970)
-//         let cert_valid_time =
-//             MlsTime::from_duration_since_epoch(Duration::from_secs(53 * 365 * 24 * 3600));
-
-//         system_validator
-//             .validate_chain(&chain, Some(cert_valid_time))
-//             .unwrap();
-
-//         assert_matches!(
-//             plain_validator.validate_chain(&chain, None),
-//             Err(X509Error::ChainValidationFailure(_))
-//         )
-//     }
-
-//     #[test]
-//     fn will_fail_on_invalid_chain() {
-//         let chain = load_test_invalid_chain();
-//         let validator = X509Validator::new(vec![load_test_ca()]).unwrap();
-
-//         let res = validator.validate_chain(&chain, Some(MlsTime::now()));
-
-//         assert_matches!(res, Err(X509Error::ChainValidationFailure(_)));
-//     }
-
-//     #[test]
-//     fn will_fail_on_invalid_ca() {
-//         let chain = load_test_invalid_ca_chain();
-//         let validator = X509Validator::new(vec![load_another_ca()]).unwrap();
-//         let res = validator.validate_chain(&chain, Some(MlsTime::now()));
-
-//         assert_matches!(res, Err(X509Error::ChainValidationFailure(_)));
-//     }
-
-//     #[test]
-//     fn can_detect_expired_certs() {
-//         let chain = load_test_cert_chain();
-
-//         let validator = X509Validator::new(vec![load_test_ca()]).unwrap();
-
-//         let res = validator.validate_chain(
-//             &chain,
-//             Some(MlsTime::from_duration_since_epoch(Duration::from_secs(
-//                 1798761600,
-//             ))),
-//         );
-
-//         assert_matches!(res, Err(X509Error::ChainValidationFailure(_)));
-//     }
-
-//     #[test]
-//     fn will_return_public_key_of_leaf() {
-//         let chain = load_test_cert_chain();
-
-//         let expected = pub_key_to_uncompressed(
-//             X509::from_der(chain.leaf().unwrap())
-//                 .unwrap()
-//                 .public_key()
-//                 .unwrap(),
-//         )
-//         .map(SignaturePublicKey::from)
-//         .unwrap();
-
-//         let validator = X509Validator::new(vec![load_test_ca()]).unwrap();
-
-//         assert_eq!(validator.validate_chain(&chain, None).unwrap(), expected)
-//     }
-
-//     #[test]
-//     fn subject_parser_bytes() {
-//         let test_cert = load_test_ca();
-
-//         let mut expected_name_builder = X509Name::builder().unwrap();
-
-//         expected_name_builder
-//             .append_entry_by_text("CN", "CA")
-//             .unwrap();
-
-//         let expected_name = expected_name_builder.build().to_der().unwrap();
-
-//         assert_eq!(
-//             X509Reader::new().subject_bytes(&test_cert).unwrap(),
-//             expected_name
-//         );
-//     }
-
-//     #[test]
-//     fn subject_parser_components() {
-//         let test_cert = load_github_leaf();
-
-//         let expected = vec![
-//             SubjectComponent::CountryName(String::from("US")),
-//             SubjectComponent::State(String::from("California")),
-//             SubjectComponent::Locality(String::from("San Francisco")),
-//             SubjectComponent::OrganizationName(String::from("GitHub, Inc.")),
-//             SubjectComponent::CommonName(String::from("github.com")),
-//         ];
-
-//         assert_eq!(
-//             X509Reader::new().subject_components(&test_cert).unwrap(),
-//             expected
-//         )
-//     }
-
-//     #[test]
-//     fn subject_alt_names() {
-//         let test_cert = load_github_leaf();
-
-//         let expected = vec![
-//             SubjectAltName::Dns(String::from("github.com")),
-//             SubjectAltName::Dns(String::from("www.github.com")),
-//         ];
-
-//         assert_eq!(
-//             X509Reader::new().subject_alt_names(&test_cert).unwrap(),
-//             expected
-//         )
-//     }
-
-//     #[test]
-//     fn subject_alt_names_ip() {
-//         let test_cert = load_ip_cert();
-
-//         let expected = vec![
-//             SubjectAltName::Ip(String::from("97.97.97.254")),
-//             SubjectAltName::Ip(String::from("97.97.97.253")),
-//         ];
-
-//         assert_eq!(
-//             X509Reader::new().subject_alt_names(&test_cert).unwrap(),
-//             expected
-//         )
-//     }
-
-//     fn test_writing_csr(ca: bool) {
-//         let subject_seckey = if ca {
-//             include_bytes!("../test_data/x509/root_ca/key.pem")
-//         } else {
-//             include_bytes!("../test_data/x509/leaf/key.pem")
-//         };
-
-//         let subject_seckey = ec_key_from_pem(subject_seckey);
-
-//         let writer =
-//             CertificateRequestWriter::new(CipherSuite::CURVE25519_AES128, subject_seckey).unwrap();
-
-//         let expected_csr = if ca {
-//             include_bytes!("../test_data/x509/root_ca/csr.pem").to_vec()
-//         } else {
-//             include_bytes!("../test_data/x509/leaf/csr.pem").to_vec()
-//         };
-
-//         let common_name = if ca { "RootCA" } else { "Leaf" };
-//         let alt_name = if ca { "rootca.org" } else { "leaf.org" };
-
-//         let params = CertificateRequestParameters {
-//             subject: vec![
-//                 SubjectComponent::CommonName(common_name.to_string()),
-//                 SubjectComponent::CountryName("CH".to_string()),
-//             ],
-//             subject_alt_names: vec![SubjectAltName::Dns(alt_name.to_string())],
-//             is_ca: ca,
-//         };
-
-//         let expected_csr = X509Req::from_pem(&expected_csr).unwrap().to_der().unwrap();
-
-//         let built_csr = writer.write(params).unwrap();
-
-//         assert_eq!(DerCertificateRequest::new(expected_csr), built_csr);
-//     }
-
-//     #[test]
-//     fn writing_ca_csr() {
-//         test_writing_csr(true)
-//     }
-
-//     #[test]
-//     fn writing_csr() {
-//         test_writing_csr(false)
-//     }
-
-//     fn ec_key_from_pem(pem_bytes: &[u8]) -> SignatureSecretKey {
-//         let key = PKey::private_key_from_pem(pem_bytes).unwrap();
-//         private_key_to_bytes(&key).unwrap().into()
-//     }
-// }
+#[cfg(test)]
+pub(crate) mod test_utils {
+    use mls_rs_identity_x509::{CertificateChain, DerCertificate};
+
+    pub fn load_test_ca() -> DerCertificate {
+        DerCertificate::from(include_bytes!("../test_data/x509/ca.der").to_vec())
+    }
+
+    pub fn load_another_ca() -> DerCertificate {
+        DerCertificate::from(include_bytes!("../test_data/x509/another_ca.der").to_vec())
+    }
+
+    pub fn load_github_leaf() -> DerCertificate {
+        DerCertificate::from(include_bytes!("../test_data/x509/github_leaf.der").to_vec())
+    }
+
+    pub fn load_ip_cert() -> DerCertificate {
+        DerCertificate::from(include_bytes!("../test_data/x509/cert_ip.der").to_vec())
+    }
+
+    pub fn load_test_cert_chain() -> CertificateChain {
+        let entry0 = include_bytes!("../test_data/x509/leaf.der").to_vec();
+        let entry1 = include_bytes!("../test_data/x509/intermediate.der").to_vec();
+        let entry2 = include_bytes!("../test_data/x509/ca.der").to_vec();
+
+        CertificateChain::from_iter(
+            [entry0, entry1, entry2]
+                .into_iter()
+                .map(DerCertificate::from),
+        )
+    }
+
+    pub fn load_test_system_cert_chain() -> CertificateChain {
+        let entry0 = include_bytes!("../test_data/x509/github_leaf.der").to_vec();
+        let entry1 = include_bytes!("../test_data/x509/github_intermediate.der").to_vec();
+
+        CertificateChain::from_iter([entry0, entry1].into_iter().map(DerCertificate::from))
+    }
+
+    pub fn load_test_invalid_chain() -> CertificateChain {
+        let entry0 = include_bytes!("../test_data/x509/github_leaf.der").to_vec();
+        let entry1 = include_bytes!("../test_data/x509/intermediate.der").to_vec();
+
+        CertificateChain::from_iter([entry0, entry1].into_iter().map(DerCertificate::from))
+    }
+
+    pub fn load_test_invalid_ca_chain() -> CertificateChain {
+        let entry0 = include_bytes!("../test_data/x509/leaf.der").to_vec();
+        let entry1 = include_bytes!("../test_data/x509/intermediate.der").to_vec();
+        let entry2 = include_bytes!("../test_data/x509/another_ca.der").to_vec();
+
+        CertificateChain::from_iter(
+            [entry0, entry1, entry2]
+                .into_iter()
+                .map(DerCertificate::from),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use assert_matches::assert_matches;
+    use mls_rs_core::{
+        crypto::{CipherSuite, SignaturePublicKey, SignatureSecretKey},
+        time::MlsTime,
+    };
+    use mls_rs_identity_x509::{
+        CertificateChain, CertificateRequestParameters, DerCertificateRequest, SubjectAltName,
+        SubjectComponent, X509CertificateReader, X509RequestWriter,
+    };
+    use openssl::{
+        pkey::PKey,
+        x509::{X509Name, X509Req, X509},
+    };
+
+    use crate::{
+        ec::private_key_to_bytes,
+        x509::{
+            test_utils::{load_another_ca, load_test_invalid_ca_chain, load_test_invalid_chain},
+            CertificateRequestWriter,
+        },
+    };
+
+    use super::{
+        pub_key_to_uncompressed,
+        test_utils::{
+            load_github_leaf, load_ip_cert, load_test_ca, load_test_cert_chain,
+            load_test_system_cert_chain,
+        },
+        X509Error, X509Reader, X509Validator,
+    };
+
+    #[test]
+    fn can_detect_invalid_ca_certificates() {
+        assert_matches!(
+            X509Validator::new(vec![vec![0u8; 32].into()]),
+            Err(X509Error::InvalidCertificateData)
+        )
+    }
+
+    #[test]
+    fn can_detect_ca_cert_with_invalid_self_signed_signature() {
+        let test_cert = load_test_cert_chain()[0].clone();
+
+        assert_matches!(
+            X509Validator::new(vec![test_cert]),
+            Err(X509Error::NonSelfSignedCa)
+        )
+    }
+
+    #[test]
+    fn can_validate_cert_chain() {
+        let chain = load_test_cert_chain();
+
+        let validator = X509Validator::new(vec![load_test_ca()]).unwrap();
+        let system_validator = X509Validator::new(vec![]).unwrap().with_system_ca();
+
+        validator
+            .validate_chain(&chain, Some(MlsTime::now()))
+            .unwrap();
+
+        assert_matches!(
+            system_validator.validate_chain(&chain, None),
+            Err(X509Error::ChainValidationFailure(_))
+        )
+    }
+
+    #[test]
+    fn will_fail_on_empty_chain() {
+        let validator = X509Validator::new(vec![]).unwrap();
+        let empty: Vec<Vec<u8>> = Vec::new();
+
+        let res = validator.validate_chain(&CertificateChain::from(empty), Some(MlsTime::now()));
+
+        assert_matches!(res, Err(X509Error::EmptyCertificateChain));
+    }
+
+    #[test]
+    fn can_validate_against_system_ca_list() {
+        let chain = load_test_system_cert_chain();
+
+        let plain_validator = X509Validator::new(vec![load_test_ca()]).unwrap();
+        let system_validator = X509Validator::new(vec![]).unwrap().with_system_ca();
+
+        // Some time in late 2022 (almost 53 years since 1970)
+        let cert_valid_time =
+            MlsTime::from_duration_since_epoch(Duration::from_secs(53 * 365 * 24 * 3600));
+
+        system_validator
+            .validate_chain(&chain, Some(cert_valid_time))
+            .unwrap();
+
+        assert_matches!(
+            plain_validator.validate_chain(&chain, None),
+            Err(X509Error::ChainValidationFailure(_))
+        )
+    }
+
+    #[test]
+    fn will_fail_on_invalid_chain() {
+        let chain = load_test_invalid_chain();
+        let validator = X509Validator::new(vec![load_test_ca()]).unwrap();
+
+        let res = validator.validate_chain(&chain, Some(MlsTime::now()));
+
+        assert_matches!(res, Err(X509Error::ChainValidationFailure(_)));
+    }
+
+    #[test]
+    fn will_fail_on_invalid_ca() {
+        let chain = load_test_invalid_ca_chain();
+        let validator = X509Validator::new(vec![load_another_ca()]).unwrap();
+        let res = validator.validate_chain(&chain, Some(MlsTime::now()));
+
+        assert_matches!(res, Err(X509Error::ChainValidationFailure(_)));
+    }
+
+    #[test]
+    fn can_detect_expired_certs() {
+        let chain = load_test_cert_chain();
+
+        let validator = X509Validator::new(vec![load_test_ca()]).unwrap();
+
+        let res = validator.validate_chain(
+            &chain,
+            Some(MlsTime::from_duration_since_epoch(Duration::from_secs(
+                1798761600,
+            ))),
+        );
+
+        assert_matches!(res, Err(X509Error::ChainValidationFailure(_)));
+    }
+
+    #[test]
+    fn will_return_public_key_of_leaf() {
+        let chain = load_test_cert_chain();
+
+        let expected = pub_key_to_uncompressed(
+            X509::from_der(chain.leaf().unwrap())
+                .unwrap()
+                .public_key()
+                .unwrap(),
+        )
+        .map(SignaturePublicKey::from)
+        .unwrap();
+
+        let validator = X509Validator::new(vec![load_test_ca()]).unwrap();
+
+        assert_eq!(validator.validate_chain(&chain, None).unwrap(), expected)
+    }
+
+    #[test]
+    fn subject_parser_bytes() {
+        let test_cert = load_test_ca();
+
+        let mut expected_name_builder = X509Name::builder().unwrap();
+
+        expected_name_builder
+            .append_entry_by_text("CN", "CA")
+            .unwrap();
+
+        let expected_name = expected_name_builder.build().to_der().unwrap();
+
+        assert_eq!(
+            X509Reader::new().subject_bytes(&test_cert).unwrap(),
+            expected_name
+        );
+    }
+
+    #[test]
+    fn subject_parser_components() {
+        let test_cert = load_github_leaf();
+
+        let expected = vec![
+            SubjectComponent::CountryName(String::from("US")),
+            SubjectComponent::State(String::from("California")),
+            SubjectComponent::Locality(String::from("San Francisco")),
+            SubjectComponent::OrganizationName(String::from("GitHub, Inc.")),
+            SubjectComponent::CommonName(String::from("github.com")),
+        ];
+
+        assert_eq!(
+            X509Reader::new().subject_components(&test_cert).unwrap(),
+            expected
+        )
+    }
+
+    #[test]
+    fn subject_alt_names() {
+        let test_cert = load_github_leaf();
+
+        let expected = vec![
+            SubjectAltName::Dns(String::from("github.com")),
+            SubjectAltName::Dns(String::from("www.github.com")),
+        ];
+
+        assert_eq!(
+            X509Reader::new().subject_alt_names(&test_cert).unwrap(),
+            expected
+        )
+    }
+
+    #[test]
+    fn subject_alt_names_ip() {
+        let test_cert = load_ip_cert();
+
+        let expected = vec![
+            SubjectAltName::Ip(String::from("97.97.97.254")),
+            SubjectAltName::Ip(String::from("97.97.97.253")),
+        ];
+
+        assert_eq!(
+            X509Reader::new().subject_alt_names(&test_cert).unwrap(),
+            expected
+        )
+    }
+
+    fn test_writing_csr(ca: bool) {
+        let subject_seckey = if ca {
+            include_bytes!("../test_data/x509/root_ca/key.pem")
+        } else {
+            include_bytes!("../test_data/x509/leaf/key.pem")
+        };
+
+        let subject_seckey = ec_key_from_pem(subject_seckey);
+
+        let writer =
+            CertificateRequestWriter::new(CipherSuite::CURVE25519_AES128, subject_seckey).unwrap();
+
+        let expected_csr = if ca {
+            include_bytes!("../test_data/x509/root_ca/csr.pem").to_vec()
+        } else {
+            include_bytes!("../test_data/x509/leaf/csr.pem").to_vec()
+        };
+
+        let common_name = if ca { "RootCA" } else { "Leaf" };
+        let alt_name = if ca { "rootca.org" } else { "leaf.org" };
+
+        let params = CertificateRequestParameters {
+            subject: vec![
+                SubjectComponent::CommonName(common_name.to_string()),
+                SubjectComponent::CountryName("CH".to_string()),
+            ],
+            subject_alt_names: vec![SubjectAltName::Dns(alt_name.to_string())],
+            is_ca: ca,
+        };
+
+        let expected_csr = X509Req::from_pem(&expected_csr).unwrap().to_der().unwrap();
+
+        let built_csr = writer.write(params).unwrap();
+
+        assert_eq!(DerCertificateRequest::new(expected_csr), built_csr);
+    }
+
+    #[test]
+    fn writing_ca_csr() {
+        test_writing_csr(true)
+    }
+
+    #[test]
+    fn writing_csr() {
+        test_writing_csr(false)
+    }
+
+    fn ec_key_from_pem(pem_bytes: &[u8]) -> SignatureSecretKey {
+        let key = PKey::private_key_from_pem(pem_bytes).unwrap();
+        private_key_to_bytes(&key).unwrap().into()
+    }
+}
