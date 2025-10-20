@@ -1,0 +1,37 @@
+[package]
+name = "mls-rs-identity-x509"
+version = "0.18.0"
+edition = "2021"
+description = "X509 Identity utilities for mls-rs"
+homepage = "https://github.com/awslabs/mls-rs"
+repository = "https://github.com/awslabs/mls-rs"
+keywords = ["mls", "mls-rs"]
+license = "MIT"
+
+[features]
+default = ["std"]
+std = ["mls-rs-core/std", "dep:thiserror"]
+
+[dependencies]
+mls-rs-core = { path = "../mls-rs-core", default-features = false, features = ["x509"], version = "0.24.0" }
+maybe-async = "0.2.10"
+thiserror = { version = "2", optional = true }
+
+# Async mode dependencies
+[target.'cfg(mls_build_async)'.dependencies]
+async-trait = "0.1.74"
+
+[dev-dependencies]
+mockall = "0.13"
+assert_matches = "1"
+rand = "0.8"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = { version = "0.3" }
+getrandom = { version = "0.2", features = ["js"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { version = "0.2" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mls_build_async)'] }

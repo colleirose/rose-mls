@@ -1,0 +1,36 @@
+[package]
+name = "mls-rs-provider-sqlite"
+version = "0.19.0"
+edition = "2021"
+description = "SQLite based state storage for mls-rs"
+homepage = "https://github.com/awslabs/mls-rs"
+repository = "https://github.com/awslabs/mls-rs"
+keywords = ["mls", "mls-rs"]
+license = "MIT"
+
+[dependencies]
+mls-rs-core = { path = "../mls-rs-core", version = "0.24.0" }
+thiserror = "2"
+wasm-bindgen = { version = "0.2", optional = true }
+zeroize = { version = "1", features = ["zeroize_derive"] }
+rusqlite = { version = "0.32", default-features = false }
+hex = { version = "0.4" }
+maybe-async = "0.2.10"
+async-trait = "0.1.74"
+
+[dev-dependencies]
+tempfile = "3"
+assert_matches = "1"
+anyhow = "1"
+rand = "0.9"
+
+[features]
+default = ["sqlcipher-bundled"]
+
+sqlite = []
+sqlite-bundled = ["sqlite", "rusqlite/bundled"]
+sqlcipher = ["sqlite", "rusqlite/sqlcipher"]
+sqlcipher-bundled = ["sqlite", "rusqlite/bundled-sqlcipher"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mls_build_async)'] }

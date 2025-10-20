@@ -1,0 +1,34 @@
+[package]
+name = "mls-rs-uniffi"
+version = "0.10.0"
+edition = "2021"
+description = "An UniFFI-compatible implementation of Messaging Layer Security (RFC 9420)"
+homepage = "https://github.com/awslabs/mls-rs"
+repository = "https://github.com/awslabs/mls-rs"
+keywords = ["mls", "e2ee", "uniffi"]
+categories = ["cryptography"]
+license = "MIT"
+rust-version = "1.68.2"
+
+[lib]
+crate-type = ["lib", "cdylib"]
+name = "mls_rs_uniffi"
+
+[dependencies]
+async-trait = "0.1.77"
+maybe-async = "0.2.10"
+mls-rs = { version = "0.51.0", path = "../mls-rs" }
+mls-rs-core = { version = "0.24.0", path = "../mls-rs-core" }
+mls-rs-crypto-impl = { version = "0.18.0", path = "../mls-rs-crypto-impl" }
+thiserror = "2"
+uniffi = { git = "https://github.com/mozilla/uniffi-rs/", rev = "eeb785c", version = "0.27.0" }
+
+[target.'cfg(mls_build_async)'.dependencies]
+tokio = { version = "1.36.0", features = ["sync"] }
+
+[dev-dependencies]
+uniffi_bindgen = { git = "https://github.com/mozilla/uniffi-rs/", rev = "eeb785c", version = "0.27.0" }
+anyhow = "1"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mls_build_async)'] }
