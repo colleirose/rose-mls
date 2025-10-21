@@ -36,7 +36,7 @@ fn make_client<P: CryptoProvider + Clone>(
 }
 
 fn main() -> Result<(), MlsError> {
-    let crypto_provider = mls_rs_crypto_impl::MainCryptoProvider::default();
+    let crypto_provider = mls_rs_crypto_provider::MainCryptoProvider::default();
 
     // Create clients for Alice and Bob
     let alice = make_client(crypto_provider.clone(), "alice")?;

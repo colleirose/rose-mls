@@ -27,7 +27,7 @@ cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         use mls_rs_crypto_webcrypto::WebCryptoProvider as TestCryptoProvider;
     } else {
-        use mls_rs_crypto_impl::MainCryptoProvider as TestCryptoProvider;
+        use mls_rs_crypto_provider::MainCryptoProvider as TestCryptoProvider;
     }
 }
 

@@ -93,7 +93,7 @@ pub type BaseSqlConfig = Config<
 ///     CipherSuite,
 /// };
 ///
-/// use mls_rs_crypto_impl::MainCryptoProvider;
+/// use mls_rs_crypto_provider::MainCryptoProvider;
 ///
 /// // Replace by code to load the certificate and secret key
 /// let secret_key = b"never hard-code secrets".to_vec().into();
@@ -122,7 +122,7 @@ pub type BaseSqlConfig = Config<
 ///     CipherSuite,
 /// };
 ///
-/// use mls_rs_crypto_impl::MainCryptoProvider;
+/// use mls_rs_crypto_provider::MainCryptoProvider;
 ///
 /// fn make_client() -> Client<impl MlsConfig> {
 ///     // Replace by code to load the certificate and secret key
@@ -148,7 +148,7 @@ pub type BaseSqlConfig = Config<
 ///     CipherSuite,
 /// };
 ///
-/// use mls_rs_crypto_impl::MainCryptoProvider;
+/// use mls_rs_crypto_provider::MainCryptoProvider;
 ///
 /// type MlsClient = Client<
 ///     WithIdentityProvider<

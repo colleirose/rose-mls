@@ -59,7 +59,7 @@ const ADD_USER_PROPOSAL_V1: ProposalType = ProposalType::new(65001);
 const CREDENTIAL_V1: CredentialType = CredentialType::new(65002);
 
 fn crypto() -> impl CryptoProvider + Clone {
-    mls_rs_crypto_impl::MainCryptoProvider::new()
+    mls_rs_crypto_provider::MainCryptoProvider::new()
 }
 
 fn cipher_suite() -> impl CipherSuiteProvider {

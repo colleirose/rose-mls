@@ -6,7 +6,7 @@ use mls_rs::{
     identity::basic,
     storage_provider::in_memory::InMemoryGroupStateStorage,
 };
-use mls_rs_crypto_impl::MainCryptoProvider;
+use mls_rs_crypto_provider::MainCryptoProvider;
 
 use self::group_state::{GroupStateStorage, GroupStateStorageAdapter};
 use crate::Error;

@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[cfg(not(feature = "benchmark_pq_crypto"))]
-pub use mls_rs_crypto_impl::MainCryptoProvider as MlsCryptoProvider;
+pub use mls_rs_crypto_provider::MainCryptoProvider as MlsCryptoProvider;
 
 #[cfg(feature = "benchmark_pq_crypto")]
 pub use mls_rs_crypto_awslc::MainCryptoProvider as MlsCryptoProvider;

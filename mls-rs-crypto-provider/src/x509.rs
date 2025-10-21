@@ -20,7 +20,7 @@ use openssl::{
     error::ErrorStack,
     hash::MessageDigest,
     nid::Nid,
-    pkey::{PKey, PKeyRef, Private, Public},
+    pkey::{PKey, Public},
     stack::Stack,
     x509::{
         extension::{BasicConstraints, KeyUsage, SubjectAlternativeName},
@@ -32,7 +32,7 @@ use openssl::{
 };
 use thiserror::Error;
 
-use crate::ec_signer::{EcSigner, EcSignerError};
+use crate::{ec::{curve_to_id, EcError, EcPrivateKey}, ec_signer::{EcSigner, EcSignerError}, MlsCryptoError};
 
 #[derive(Debug, Error)]
 pub enum X509Error {
@@ -52,6 +52,10 @@ pub enum X509Error {
     EcSignerError(#[from] EcSignerError),
     #[error(transparent)]
     OpensslError(#[from] ErrorStack),
+    #[error(transparent)]
+    MlsCryptoErrror(#[from] MlsCryptoError),
+    #[error(transparent)]
+    EcError(#[from] EcError),
 }
 
 impl IntoAnyError for X509Error {
@@ -170,6 +174,7 @@ pub fn pub_key_to_uncompressed(key: PKey<Public>) -> Result<Vec<u8>, X509Error> 
 impl X509CredentialValidator for X509Validator {
     type Error = X509Error;
 
+    #[inline]
     fn validate_chain(
         &self,
         chain: &mls_rs_identity_x509::CertificateChain,
@@ -188,6 +193,7 @@ impl X509Reader {
         Self {}
     }
 
+    #[inline]
     fn parse_certificate(&self, certificate: &DerCertificate) -> Result<X509, ErrorStack> {
         X509::from_der(certificate)
     }
@@ -372,14 +378,14 @@ fn build_subject_alt_name(
 }
 
 trait X509BuilderCommon {
-    fn sign(&mut self, key: &PKeyRef<Private>, digest: MessageDigest) -> Result<(), ErrorStack>;
+    fn sign(&mut self, key: &EcPrivateKey, digest: MessageDigest) -> Result<(), X509Error>;
 
     fn sign_with_ec_signer(
         &mut self,
         signer: &EcSigner,
         signature_key: &SignatureSecretKey,
     ) -> Result<(), X509Error> {
-        let signing_key = signer.pkey_from_secret_key(signature_key)?;
+        let signing_key = signer.ec_key_from_signature_secret_key(signature_key)?;
 
         // Sign and use MessageDigest::null if we are using ed25519 or ed448
         self.sign(
@@ -391,14 +397,18 @@ trait X509BuilderCommon {
 }
 
 impl X509BuilderCommon for X509ReqBuilder {
-    fn sign(&mut self, key: &PKeyRef<Private>, digest: MessageDigest) -> Result<(), ErrorStack> {
-        self.sign(key, digest)
+    fn sign(&mut self, key: &EcPrivateKey, digest: MessageDigest) -> Result<(), X509Error> {
+        let vec = &key.to_vec()?;
+        let key = PKey::private_key_from_raw_bytes(vec, curve_to_id(key.curve)?)?;
+        Ok(self.sign(&key, digest)?)
     }
 }
 
 impl X509BuilderCommon for X509Builder {
-    fn sign(&mut self, key: &PKeyRef<Private>, digest: MessageDigest) -> Result<(), ErrorStack> {
-        self.sign(key, digest)
+    fn sign(&mut self, key: &EcPrivateKey, digest: MessageDigest) -> Result<(), X509Error> {
+        let vec = &key.to_vec()?;
+        let key = PKey::private_key_from_raw_bytes(vec, curve_to_id(key.curve)?)?;
+        Ok(self.sign(&key, digest)?)
     }
 }
 
@@ -446,7 +456,8 @@ impl X509RequestWriter for CertificateRequestWriter {
 
         let public_key = self.signer.signature_key_derive_public(&self.signing_key)?;
 
-        builder.set_pubkey(self.signer.pkey_from_public_key(&public_key)?.deref())?;
+        let pkey = PKey::public_key_from_raw_bytes(&public_key, curve_to_id(self.signer.0)?)?;
+        builder.set_pubkey(pkey.deref())?;
         builder.sign_with_ec_signer(&self.signer, &self.signing_key)?;
 
         Ok(DerCertificateRequest::new(builder.build().to_der()?))

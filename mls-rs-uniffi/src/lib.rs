@@ -35,7 +35,7 @@ use mls_rs::mls_rules;
 use mls_rs::{CipherSuiteProvider, CryptoProvider};
 use mls_rs_core::identity;
 use mls_rs_core::identity::{BasicCredential, IdentityProvider};
-use mls_rs_crypto_impl::MainCryptoProvider;
+use mls_rs_crypto_provider::MainCryptoProvider;
 
 uniffi::setup_scaffolding!();
 
@@ -309,7 +309,7 @@ impl TryFrom<mls_rs::CipherSuite> for CipherSuite {
 pub async fn generate_signature_keypair(
     cipher_suite: CipherSuite,
 ) -> Result<SignatureKeypair, Error> {
-    let crypto_provider = mls_rs_crypto_impl::MainCryptoProvider::default();
+    let crypto_provider = mls_rs_crypto_provider::MainCryptoProvider::default();
     let cipher_suite_provider = crypto_provider
         .cipher_suite_provider(cipher_suite.into())
         .ok_or(MlsError::UnsupportedCipherSuite(cipher_suite.into()))?;

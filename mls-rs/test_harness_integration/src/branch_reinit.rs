@@ -4,7 +4,7 @@ pub(crate) mod inner {
         group::CommitEffect, identity::SigningIdentity, mls_rs_codec::MlsEncode,
         mls_rules::ProposalInfo, CipherSuiteProvider, CryptoProvider, MlsMessage,
     };
-    use mls_rs_crypto_impl::MainCryptoProvider;
+    use mls_rs_crypto_provider::MainCryptoProvider;
     use tonic::{Request, Response, Status};
 
     use crate::{

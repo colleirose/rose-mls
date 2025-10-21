@@ -19,7 +19,7 @@ pub(crate) mod test_utils {
         if #[cfg(target_arch = "wasm32")] {
             pub use mls_rs_crypto_webcrypto::WebCryptoProvider as TestCryptoProvider;
         } else {
-            pub use mls_rs_crypto_impl::MainCryptoProvider as TestCryptoProvider;
+            pub use mls_rs_crypto_provider::MainCryptoProvider as TestCryptoProvider;
         }
     }
 

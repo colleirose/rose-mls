@@ -3,7 +3,6 @@
 
 mod aead;
 mod ec;
-mod ecdsa;
 mod hmac;
 mod kdf;
 mod kem;
@@ -15,12 +14,12 @@ pub mod x509;
 use aws_lc_sys as aws_lc_sys_impl;
 pub use hmac::AwsLcHmac;
 
-use std::{ffi::c_int, mem::MaybeUninit, num::TryFromIntError};
+use std::{ffi::c_int, num::TryFromIntError};
 
 pub use aead::AwsLcAead;
 use aws_lc_rs::error::{KeyRejected, Unspecified};
 
-use crate::aws_lc_sys_impl::SHA256;
+use sha2::{Sha256, Digest};
 use mls_rs_core::{
     crypto::{
         CipherSuite, CipherSuiteProvider, CryptoProvider, HpkeCiphertext, HpkePublicKey,
@@ -29,7 +28,7 @@ use mls_rs_core::{
     error::{AnyError, IntoAnyError},
 };
 
-pub use ecdsa::AwsLcEcdsa;
+use ec_signer::EcSigner;
 pub use kdf::AwsLcHkdf;
 pub use kem::ecdh::Ecdh;
 use mls_rs_crypto_hpke::{
@@ -49,6 +48,12 @@ use ec::EcError;
 //use ec_signer::{EcSigner, EcSignerError};
 //use ecdh::Ecdh;
 use openssl::error::ErrorStack;
+
+use self::kdf::shake::AwsLcShake128;
+use mls_rs_crypto_hpke::kem_combiner::xwing::{CombinedKem, XWingSharedSecretHashInput};
+pub use self::kem::ml_kem::{MlKem, MlKemKem};
+pub use self::kdf::Sha3;
+pub use self::kdf::AwsLcHash;
 
 #[derive(Debug, Error)]
 pub enum MlsCryptoError {
@@ -77,31 +82,31 @@ pub enum MlsCryptoError {
     #[error(transparent)]
     EcError(#[from] EcError),
     #[error("rand core error: {0:?}")]
-    RandError(#[from]rand_core::Error),
+    RandError(rand_core::Error),
     #[error("cert validation failure {0:?}")]
     CertValidationFailure(String),
     #[error(transparent)]
     KeyRejectedError(#[from] KeyRejected),
 }
 
-#[cfg(feature = "post-quantum")]
-use self::kdf::shake::AwsLcShake128;
+impl From<rand_core::Error> for MlsCryptoError {
+    fn from(value: rand_core::Error) -> Self {
+        MlsCryptoError::RandError(value)
+    }
+}
 
-#[cfg(feature = "post-quantum")]
-use mls_rs_crypto_hpke::kem_combiner::xwing::{CombinedKem, XWingSharedSecretHashInput};
+impl From<Unspecified> for MlsCryptoError {
+    fn from(_value: Unspecified) -> Self {
+        MlsCryptoError::CryptoError
+    }
+}
 
-#[cfg(feature = "post-quantum")]
-pub use self::kem::ml_kem::{MlKem, MlKemKem};
-
-#[cfg(feature = "post-quantum")]
-pub use self::kdf::Sha3;
-
-pub use self::kdf::AwsLcHash;
+impl IntoAnyError for MlsCryptoError {}
 
 #[derive(Clone)]
 pub struct AwsLcCipherSuite {
     cipher_suite: CipherSuite,
-    signing: AwsLcEcdsa,
+    signing: EcSigner,
     aead: AwsLcAead,
     kdf: AwsLcHkdf,
     hpke: AwsLcHpke,
@@ -111,7 +116,6 @@ pub struct AwsLcCipherSuite {
 
 pub type EcdhKem = DhKem<Ecdh, AwsLcHkdf>;
 
-#[cfg(feature = "post-quantum")]
 pub type CombinedEcdhMlKemKem =
     CombinedKem<MlKemKem, EcdhKem, AwsLcHash, AwsLcShake128, XWingSharedSecretHashInput>;
 
@@ -119,9 +123,7 @@ pub type CombinedEcdhMlKemKem =
 #[non_exhaustive]
 enum AwsLcHpke {
     Classical(Hpke<EcdhKem, AwsLcHkdf, AwsLcAead>),
-    #[cfg(feature = "post-quantum")]
     PostQuantum(Hpke<MlKemKem, AwsLcHkdf, AwsLcAead>),
-    #[cfg(feature = "post-quantum")]
     Combined(Hpke<CombinedEcdhMlKemKem, AwsLcHkdf, AwsLcAead>),
 }
 
@@ -130,14 +132,14 @@ impl AwsLcCipherSuite {
         &self,
         bytes: &[u8],
     ) -> Result<SignatureSecretKey, MlsCryptoError> {
-        self.signing.import_ec_der_private_key(bytes)
+        self.signing.signature_key_import_der_private(bytes)
     }
 
     pub fn import_ec_der_public_key(
         &self,
         bytes: &[u8],
     ) -> Result<SignaturePublicKey, MlsCryptoError> {
-        self.signing.import_ec_der_public_key(bytes)
+        self.signing.signature_key_import_der_public(bytes)
     }
 }
 
@@ -162,7 +164,6 @@ impl MainCryptoProvider {
     pub fn all_supported_cipher_suites() -> Vec<CipherSuite> {
         [
             Self::supported_classical_cipher_suites(),
-            #[cfg(feature = "post-quantum")]
             Self::supported_pq_cipher_suites(),
         ]
         .concat()
@@ -178,7 +179,6 @@ impl MainCryptoProvider {
         ]
     }
 
-    #[cfg(feature = "post-quantum")]
     pub fn supported_pq_cipher_suites() -> Vec<CipherSuite> {
         vec![
             CipherSuite::ML_KEM_512,
@@ -199,7 +199,7 @@ impl MainCryptoProvider {
 
 #[derive(Clone, Default)]
 pub struct AwsLcCipherSuiteBuilder {
-    signing: Option<AwsLcEcdsa>,
+    signing: Option<EcSigner>,
     aead: Option<AwsLcAead>,
     kdf: Option<AwsLcHkdf>,
     hpke: Option<AwsLcHpke>,
@@ -215,7 +215,7 @@ impl AwsLcCipherSuiteBuilder {
 
     pub fn signing(self, signing: Curve) -> Self {
         Self {
-            signing: Some(AwsLcEcdsa(signing)),
+            signing: Some(EcSigner(signing)),
             ..self
         }
     }
@@ -334,7 +334,7 @@ impl AwsLcCipherSuiteBuilder {
         let hpke = self.hpke.or_else(|| classical_hpke(fallback_cs))?;
         let kdf = self.kdf.or_else(|| AwsLcHkdf::new(fallback_cs))?;
         let aead = self.aead.or_else(|| AwsLcAead::new(fallback_cs))?;
-        let signing = self.signing.or_else(|| AwsLcEcdsa::new(fallback_cs))?;
+        let signing = self.signing.or_else(|| EcSigner::new(fallback_cs))?;
         let hmac = self.hmac.or_else(|| AwsLcHmac::new(fallback_cs))?;
         let hash = self.hash.or_else(|| AwsLcHash::new(fallback_cs))?;
 
@@ -407,7 +407,7 @@ impl CryptoProvider for MainCryptoProvider {
             hpke,
             aead,
             kdf,
-            signing: AwsLcEcdsa::new(classical_cs)?,
+            signing: EcSigner::new(classical_cs)?,
             hmac,
             hash: AwsLcHash::new(classical_cs)?,
         })
@@ -421,14 +421,6 @@ pub fn dhkem(cipher_suite: CipherSuite) -> Option<DhKem<Ecdh, AwsLcHkdf>> {
 
     Some(DhKem::new(dh, kdf, kem_id as u16, kem_id.n_secret()))
 }
-
-impl From<Unspecified> for MlsCryptoError {
-    fn from(_value: Unspecified) -> Self {
-        MlsCryptoError::CryptoError
-    }
-}
-
-impl IntoAnyError for MlsCryptoError {}
 
 #[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
 #[cfg_attr(all(target_arch = "wasm32", mls_build_async), maybe_async::must_be_async(?Send))]
@@ -659,35 +651,22 @@ impl CipherSuiteProvider for AwsLcCipherSuite {
     }
 }
 
+#[inline]
 pub fn sha256(data: &[u8]) -> [u8; 32] {
-    unsafe {
-        let mut out = MaybeUninit::<[u8; 32]>::uninit();
-        SHA256(data.as_ptr(), data.len(), out.as_mut_ptr() as *mut u8);
-        out.assume_init()
-    }
+    Sha256::digest(data).into()
 }
 
-fn check_res(r: c_int) -> Result<(), MlsCryptoError> {
-    check_int_return(r).map(|_| ())
-}
-
+#[inline]
 fn check_int_return(r: c_int) -> Result<c_int, MlsCryptoError> {
-    if r <= 0 {
-        Err(MlsCryptoError::CryptoError)
-    } else {
+    if r > 0 {
         Ok(r)
+    } else {
+        Err(MlsCryptoError::CryptoError)
     }
 }
 
+#[inline]
 fn check_non_null<T>(r: *mut T) -> Result<*mut T, MlsCryptoError> {
-    if r.is_null() {
-        return Err(MlsCryptoError::CryptoError);
-    }
-
-    Ok(r)
-}
-
-fn check_non_null_const<T>(r: *const T) -> Result<*const T, MlsCryptoError> {
     if r.is_null() {
         return Err(MlsCryptoError::CryptoError);
     }

@@ -330,7 +330,7 @@ pub(crate) mod inner {
 
 #[cfg(feature = "by_ref_proposal")]
 pub(crate) mod external_proposal {
-    use mls_rs_crypto_impl::MainCryptoProvider;
+    use mls_rs_crypto_provider::MainCryptoProvider;
     use tonic::{Request, Response, Status};
 
     use mls_rs::{

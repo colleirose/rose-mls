@@ -21,7 +21,7 @@ use crate::{
     Client,
 };
 
-pub use mls_rs_crypto_impl::MainCryptoProvider as MlsCryptoProvider;
+pub use mls_rs_crypto_provider::MainCryptoProvider as MlsCryptoProvider;
 
 pub type TestClientConfig =
     WithIdentityProvider<BasicIdentityProvider, WithCryptoProvider<MlsCryptoProvider, BaseConfig>>;

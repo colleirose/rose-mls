@@ -18,6 +18,8 @@ use mls_rs_crypto_traits::{KdfType, KemResult, KemType};
 
 use rand_core::{OsRng, RngCore};
 
+use likely_stable::{likely,unlikely};
+
 use crate::{check_non_null, kdf::AwsLcHkdf, MlsCryptoError};
 
 #[derive(Clone)]
@@ -133,7 +135,7 @@ impl KemType for MlKemKem {
         let secret_key_size = self.secret_key_size();
         let public_key_size = self.public_key_size();
 
-        if ikm.len() == self.seed_length_for_derive() {
+        if likely(ikm.len() == self.seed_length_for_derive()) {
             Ok(unsafe { kem_derive(nid, ikm, secret_key_size, public_key_size) }?)
         } else {
             let ikm = self.kdf.expand(ikm, &[], self.seed_length_for_derive())?;
@@ -191,7 +193,7 @@ unsafe fn kem_derive(
 ) -> Result<(HpkeSecretKey, HpkePublicKey), Unspecified> {
     let ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_KEM, null_mut());
 
-    if 1 != EVP_PKEY_CTX_kem_set_params(ctx, nid) || 1 != EVP_PKEY_keygen_init(ctx) {
+    if unlikely(1 != EVP_PKEY_CTX_kem_set_params(ctx, nid) || 1 != EVP_PKEY_keygen_init(ctx)) {
         EVP_PKEY_CTX_free(ctx);
         return Err(Unspecified);
     }
@@ -199,7 +201,7 @@ unsafe fn kem_derive(
     let mut pkey: *mut EVP_PKEY = null_mut();
     let mut ikm_len = ikm.len();
 
-    if 1 != EVP_PKEY_keygen_deterministic(ctx, &mut pkey, ikm.as_ptr(), &mut ikm_len) {
+    if unlikely(1 != EVP_PKEY_keygen_deterministic(ctx, &mut pkey, ikm.as_ptr(), &mut ikm_len)) {
         EVP_PKEY_CTX_free(ctx);
         return Err(Unspecified);
     }

@@ -32,7 +32,7 @@ use mls_rs::{
 #[cfg(feature = "by_ref_proposal")]
 use mls_rs::external_client::builder::ExternalBaseConfig;
 
-use mls_rs_crypto_impl::MainCryptoProvider;
+use mls_rs_crypto_provider::MainCryptoProvider;
 
 use clap::Parser;
 use std::{collections::HashMap, convert::Infallible, net::IpAddr, sync::Arc};

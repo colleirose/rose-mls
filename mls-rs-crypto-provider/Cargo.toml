@@ -1,8 +1,8 @@
 [package]
-name = "mls-rs-crypto-impl"
+name = "mls-rs-crypto-provider"
 version = "0.18.0"
 edition = "2021"
-description = "CryptoProvider for mls-rs"
+description = "Provides cryptographic primitives needed for MLS"
 keywords = ["mls", "mls-rs"]
 license = "MIT"
 
@@ -14,17 +14,17 @@ post-quantum = ["aws-lc-rs/unstable", "mls-rs-core/post-quantum"]
 default = ["x509", "non-fips", "post-quantum"]
 
 [dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
-
-aws-lc-rs = { version = "=1.14.1", default-features = false, features = ["alloc"] }
-aws-lc-sys = { version = "=0.32", optional = true }
-#aws-lc-fips-sys = { version = "=0.13", optional = true }
-
 mls-rs-core = { path = "../mls-rs-core", version = "0.24.0" }
 mls-rs-crypto-hpke = { path = "../mls-rs-crypto-hpke", version = "0.18.0" }
 mls-rs-crypto-traits = { path = "../mls-rs-crypto-traits", version = "0.19.0" }
 
+openssl = { version = "0.10", features = ["vendored"] }
+aws-lc-rs = { version = "=1.14.1", default-features = false, features = ["alloc"] }
+aws-lc-sys = { version = "=0.32", optional = true }
+#aws-lc-fips-sys = { version = "=0.13", optional = true }
+
 thiserror = "2"
+likely_stable = "0.1"
 zeroize = { version = "1", default-features = false, features = ["alloc", "zeroize_derive"] }
 
 # Random
@@ -54,7 +54,6 @@ mls-rs-identity-x509 = { path = "../mls-rs-identity-x509", optional = true, vers
 x509-cert = { version = "0.2", optional = true, features = ["std"] }
 spki = { version = "0.7", optional = true, features = ["std", "alloc"] }
 maybe-async = "0.2.10"
-
 
 [dev-dependencies]
 hex = { version = "^0.4.3", features = ["serde"] }

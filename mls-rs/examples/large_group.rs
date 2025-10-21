@@ -168,7 +168,7 @@ fn make_name(i: usize) -> String {
 }
 
 fn main() -> Result<(), MlsError> {
-    let crypto_provider = mls_rs_crypto_impl::MainCryptoProvider::default();
+    let crypto_provider = mls_rs_crypto_provider::MainCryptoProvider::default();
 
     println!("Demonstrate that performance depends on a) group evolution and b) a members position in the tree.\n");
 

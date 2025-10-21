@@ -42,7 +42,7 @@ pub type ExternalBaseConfig = Config<Missing, DefaultMlsRules, Missing>;
 ///     identity::basic::BasicIdentityProvider,
 /// };
 ///
-/// use mls_rs_crypto_impl::MainCryptoProvider;
+/// use mls_rs_crypto_provider::MainCryptoProvider;
 ///
 /// let _client = ExternalClient::builder()
 ///     .crypto_provider(MainCryptoProvider::default())
@@ -61,7 +61,7 @@ pub type ExternalBaseConfig = Config<Missing, DefaultMlsRules, Missing>;
 ///     identity::basic::BasicIdentityProvider,
 /// };
 ///
-/// use mls_rs_crypto_impl::MainCryptoProvider;
+/// use mls_rs_crypto_provider::MainCryptoProvider;
 ///
 /// fn make_client() -> ExternalClient<impl MlsConfig> {
 ///     ExternalClient::builder()
@@ -78,7 +78,7 @@ pub type ExternalBaseConfig = Config<Missing, DefaultMlsRules, Missing>;
 ///     identity::basic::BasicIdentityProvider,
 /// };
 ///
-/// use mls_rs_crypto_impl::MainCryptoProvider;
+/// use mls_rs_crypto_provider::MainCryptoProvider;
 ///
 /// type MlsClient = ExternalClient<WithIdentityProvider<
 ///     BasicIdentityProvider,

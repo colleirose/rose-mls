@@ -26,7 +26,7 @@ fn cipher_suite_provider() -> impl CipherSuiteProvider {
 }
 
 fn crypto_provider() -> impl CryptoProvider + Clone {
-    mls_rs_crypto_impl::MainCryptoProvider::default()
+    mls_rs_crypto_provider::MainCryptoProvider::default()
 }
 
 #[derive(Default)]

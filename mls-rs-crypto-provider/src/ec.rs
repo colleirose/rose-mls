@@ -12,14 +12,15 @@ use openssl::{
     nid::Nid,
     pkey::{HasParams, Id, PKey, Private, Public},
 };
-use crate::{aws_lc_sys_impl::{
+use crate::aws_lc_sys_impl::{
     d2i_ECPrivateKey, point_conversion_form_t, BN_bin2bn, BN_bn2bin, BN_free, EC_GROUP_free,
     EC_GROUP_new_by_curve_name, EC_KEY_free, EC_KEY_generate_key, EC_KEY_get0_group,
     EC_KEY_get0_private_key, EC_KEY_get0_public_key, EC_KEY_new_by_curve_name,
     EC_KEY_set_private_key, EC_KEY_set_public_key, EC_POINT_copy, EC_POINT_free, EC_POINT_mul,
     EC_POINT_new, EC_POINT_oct2point, EC_POINT_point2oct, EVP_PKEY_free, EVP_PKEY_new,
     EVP_PKEY_set1_EC_KEY, NID_X9_62_prime256v1, NID_secp384r1, NID_secp521r1, EC_POINT, EVP_PKEY,
-}, ed448::{ed448_private_key_from_bytes, ed448_private_key_from_der, ed448_private_key_to_bytes, ed448_private_key_to_public, ed448_pub_key_from_uncompressed, ed448_pub_key_to_uncompressed, ed448_public_key_from_der, generate_ed448_key}};
+};
+use crate::ed448::{ed448_private_key_from_bytes, ed448_private_key_from_der, ed448_private_key_to_bytes, ed448_private_key_to_public, ed448_pub_key_from_uncompressed, ed448_pub_key_to_uncompressed, ed448_public_key_from_der, generate_ed448_key};
 use aws_lc_rs::error::Unspecified;
 
 use crate::MlsCryptoError;
@@ -70,6 +71,19 @@ pub struct EcPrivateKey {
 }
 
 #[inline]
+pub fn ec_generate(curve: Curve) -> Result<(Vec<u8>, Vec<u8>), MlsCryptoError> {
+    let private_key = EcPrivateKey::generate(curve)?;
+    let public_key = private_key.public_key()?;
+
+    Ok((private_key.to_vec()?, public_key.to_vec()?))
+}
+
+pub fn generate_keypair(curve: Curve) -> Result<KeyPair, MlsCryptoError> {
+    let keys = ec_generate(curve)?;
+    Ok(KeyPair { secret: keys.0, public: keys.1 })
+}
+
+#[inline]
 pub fn curve_to_id(c: Curve) -> Result<Id, EcError> {
     match c {
         Curve::P256 | Curve::P384 | Curve::P521 => Ok(Id::EC),
@@ -91,47 +105,11 @@ pub fn nist_curve_id(curve: Curve) -> Option<i32> {
     }
 }
 
-// TODO this is duplicative, unsure if still used
 #[inline]
 pub fn private_key_bytes_to_public(curve: Curve, secret_key: &[u8]) -> Result<Vec<u8>, MlsCryptoError> {
     Ok(EcPrivateKey::from_bytes(secret_key, curve)?
         .public_key()?
         .to_vec()?)
-}
-
-pub fn ec_generate(curve: Curve) -> Result<(Vec<u8>, Vec<u8>), MlsCryptoError> {
-    let private_key = EcPrivateKey::generate(curve)?;
-    let public_key = private_key.public_key()?;
-
-    Ok((private_key.to_vec()?, public_key.to_vec()?))
-}
-
-pub fn generate_keypair(curve: Curve) -> Result<KeyPair, MlsCryptoError> {
-    let keys = ec_generate(curve)?;
-    Ok(KeyPair { secret: keys.0, public: keys.1 })
-}
-
-#[derive(Clone, Default)]
-pub struct KeyPair {
-    pub public: Vec<u8>,
-    pub secret: Vec<u8>,
-}
-
-impl Debug for KeyPair {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("KeyPair")
-            .field("public", &mls_rs_core::debug::pretty_bytes(&self.public))
-            .finish()
-    }
-}
-
-pub fn private_key_ecdh(
-    private_key: &Ed448PrivateKey,
-    remote_public: &Ed448PublicKey,
-) -> Result<Vec<u8>, ErrorStack> {
-    let mut ecdh_derive = Deriver::new(private_key)?;
-    ecdh_derive.set_peer(remote_public)?;
-    ecdh_derive.derive_to_vec()
 }
 
 pub fn curve_from_nid(nid: Nid) -> Option<Curve> {
@@ -158,6 +136,29 @@ pub fn curve_from_pkey<T: HasParams>(value: &PKey<T>) -> Option<Curve> {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct KeyPair {
+    pub public: Vec<u8>,
+    pub secret: Vec<u8>,
+}
+
+impl Debug for KeyPair {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KeyPair")
+            .field("public", &mls_rs_core::debug::pretty_bytes(&self.public))
+            .finish()
+    }
+}
+
+pub fn private_key_ecdh(
+    private_key: &Ed448PrivateKey,
+    remote_public: &Ed448PublicKey,
+) -> Result<Vec<u8>, ErrorStack> {
+    let mut ecdh_derive = Deriver::new(private_key)?;
+    ecdh_derive.set_peer(remote_public)?;
+    ecdh_derive.derive_to_vec()
+}
+
 impl EcPrivateKey {
     pub fn generate(curve: Curve) -> Result<Self, MlsCryptoError> {
         let value = match curve {
@@ -177,7 +178,7 @@ impl EcPrivateKey {
     pub fn from_bytes(bytes: &[u8], curve: Curve) -> Result<Self, MlsCryptoError> {
         let value = match curve {
             Curve::Ed448 => {
-                let key = ed448_private_key_from_bytes(bytes, true)?;
+                let key = ed448_private_key_from_bytes(bytes)?;
                 PrivateKeyValue::OpenSSL(key)
             },
             _ => {

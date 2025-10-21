@@ -28,7 +28,7 @@ default = ["tree_index", "private_message", "prior_epoch", "out_of_order", "psk"
 # mls-rs-crypto-rustcrypto = { path = "../../mls-rs-crypto-rustcrypto", features = ["browser"], version = "0.19.0" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-mls-rs-crypto-impl = { path = "../../mls-rs-crypto-impl", version = "0.18.0"}
+mls-rs-crypto-provider = { path = "../../mls-rs-crypto-provider", version = "0.18.0"}
 
 [build-dependencies]
 tonic-build = "0.10.2"
