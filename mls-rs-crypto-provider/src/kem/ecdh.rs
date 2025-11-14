@@ -1,14 +1,17 @@
 use std::os::raw::c_void;
 
-use crate::{aws_lc_sys_impl::{
-    ECDH_compute_key, X25519_keypair, X25519_public_from_private, X25519,
-}, ec::{AwsLcPrivateKey, AwsLcPublicKey}};
+use crate::{
+    aws_lc_sys_impl::{ECDH_compute_key, X25519_keypair, X25519_public_from_private, X25519},
+    ec::{AwsLcPrivateKey, AwsLcPublicKey},
+};
 use aws_lc_rs::error::Unspecified;
 use mls_rs_core::crypto::{CipherSuite, HpkePublicKey, HpkeSecretKey};
 use mls_rs_crypto_traits::{Curve, SamplingMethod};
 
 use crate::{
-    ec::{ec_generate, private_key_bytes_to_public, EcPrivateKey, EcPublicKey, SUPPORTED_NIST_CURVES},
+    ec::{
+        ec_generate, private_key_bytes_to_public, EcPrivateKey, EcPublicKey, SUPPORTED_NIST_CURVES,
+    },
     MlsCryptoError,
 };
 
@@ -116,14 +119,18 @@ pub fn ecdh(
             _ => return Err(MlsCryptoError::CryptoError),
         };
 
-        let mut deriver = openssl::derive::Deriver::new(&der_priv)
+        let mut deriver =
+            openssl::derive::Deriver::new(&der_priv).map_err(|_| MlsCryptoError::CryptoError)?;
+        deriver
+            .set_peer(&der_pub)
             .map_err(|_| MlsCryptoError::CryptoError)?;
-        deriver.set_peer(&der_pub).map_err(|_| MlsCryptoError::CryptoError)?;
-        let shared = deriver.derive_to_vec().map_err(|_| MlsCryptoError::CryptoError)?;
+        let shared = deriver
+            .derive_to_vec()
+            .map_err(|_| MlsCryptoError::CryptoError)?;
         Ok(shared)
     } else {
         let mut secret_buf = vec![0u8; curve.secret_key_size()];
-        
+
         let aws_lc_secret_key = AwsLcPrivateKey::from_bytes(secret_key, curve)?;
         let aws_lc_public_key = AwsLcPublicKey::from_bytes(secret_key, curve)?;
         let out_len = unsafe {

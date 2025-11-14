@@ -1,22 +1,23 @@
-// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // Copyright by contributors to this project.
-// SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// SPDX-License-Identifier: MIT
 
 use std::{ffi::c_void, mem::MaybeUninit, ops::Deref};
 
-use aws_lc_rs::{digest, signature};
 use aws_lc_rs::error::Unspecified;
 use aws_lc_rs::signature::UnparsedPublicKey;
-use aws_lc_sys::{ECDSA_SIG_free, ECDSA_SIG_to_bytes, ECDSA_do_sign, ED25519_sign, OPENSSL_free, ED25519_PRIVATE_KEY_LEN, ED25519_SIGNATURE_LEN};
+use aws_lc_rs::signature;
+use aws_lc_sys::{
+    ECDSA_SIG_free, ECDSA_SIG_to_bytes, ECDSA_do_sign, ED25519_sign, OPENSSL_free,
+    ED25519_PRIVATE_KEY_LEN, ED25519_SIGNATURE_LEN,
+};
 use mls_rs_core::crypto::{CipherSuite, SignaturePublicKey, SignatureSecretKey};
 use mls_rs_crypto_traits::Curve;
 use openssl::hash::MessageDigest;
 
+use sha2::{Digest, Sha256, Sha384, Sha512};
 use thiserror::Error;
 
-use crate::ec::{
-    ec_generate, AwsLcPrivateKey, EcError, EcPrivateKey, EcPublicKey
-};
+use crate::ec::{ec_generate, AwsLcPrivateKey, EcError, EcPrivateKey, EcPublicKey};
 use crate::ed448::{ed448_private_key_from_bytes, ed448_pub_key_from_uncompressed};
 use crate::MlsCryptoError;
 
@@ -81,7 +82,9 @@ impl EcSigner {
         &self,
         secret_key: &SignatureSecretKey,
     ) -> Result<SignaturePublicKey, MlsCryptoError> {
-        let bytes = EcPrivateKey::from_bytes(&secret_key, self.0)?.public_key()?.to_vec()?;
+        let bytes = EcPrivateKey::from_bytes(&secret_key, self.0)?
+            .public_key()?
+            .to_vec()?;
         Ok(bytes.into())
     }
 
@@ -94,11 +97,12 @@ impl EcSigner {
         EcPrivateKey::from_bytes(key, self.0).map_err(Into::into)
     }
 
+    #[inline]
     fn hash(&self, data: &[u8]) -> Result<Vec<u8>, MlsCryptoError> {
         match self.0 {
-            Curve::P256 => Ok(digest::digest(&digest::SHA256, data).as_ref().to_vec()),
-            Curve::P384 => Ok(digest::digest(&digest::SHA384, data).as_ref().to_vec()),
-            Curve::P521 => Ok(digest::digest(&digest::SHA512, data).as_ref().to_vec()),
+            Curve::P256 => Ok(Sha256::digest(data).to_vec()),
+            Curve::P384 => Ok(Sha384::digest(data).to_vec()),
+            Curve::P521 => Ok(Sha512::digest(data).to_vec()),
             _ => Err(MlsCryptoError::UnsupportedCipherSuite),
         }
     }
@@ -151,15 +155,17 @@ impl EcSigner {
             let mut out_len = MaybeUninit::<usize>::uninit();
 
             unsafe {
-                if 1 != ECDSA_SIG_to_bytes(out_bytes.as_mut_ptr(), out_len.as_mut_ptr(), signature) {
+                if 1 != ECDSA_SIG_to_bytes(out_bytes.as_mut_ptr(), out_len.as_mut_ptr(), signature)
+                {
                     ECDSA_SIG_free(signature);
                     return Err(Unspecified.into());
                 }
 
                 ECDSA_SIG_free(signature);
 
-                let ret = core::slice::from_raw_parts(out_bytes.assume_init(), out_len.assume_init())
-                    .to_vec();
+                let ret =
+                    core::slice::from_raw_parts(out_bytes.assume_init(), out_len.assume_init())
+                        .to_vec();
 
                 OPENSSL_free(out_bytes.assume_init() as *mut c_void);
 

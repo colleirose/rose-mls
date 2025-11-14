@@ -21,7 +21,7 @@ mls-rs-crypto-traits = { path = "../mls-rs-crypto-traits", version = "0.19.0" }
 openssl = { version = "0.10", features = ["vendored"] }
 aws-lc-rs = { version = "=1.14.1", default-features = false, features = ["alloc"] }
 aws-lc-sys = { version = "=0.32", optional = true }
-#aws-lc-fips-sys = { version = "=0.13", optional = true }
+maybe-async = "0.2.10"
 
 thiserror = "2"
 likely_stable = "0.1"
@@ -38,6 +38,7 @@ aead = { version = "0.5", default-features = false, features = ["alloc", "getran
 
 # Hash
 sha2 = { version = "0.10", default-features = false }
+sha3 = "0.10.8"
 
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hkdf = { version = "0.12", default-features = false }
@@ -53,7 +54,9 @@ sec1 = { version = "0.7", default-features = false, features = ["alloc"] }
 mls-rs-identity-x509 = { path = "../mls-rs-identity-x509", optional = true, version = "0.18.0" }
 x509-cert = { version = "0.2", optional = true, features = ["std"] }
 spki = { version = "0.7", optional = true, features = ["std", "alloc"] }
-maybe-async = "0.2.10"
+
+[patch.crates-io]
+openssl-src = { path = "../openssl-src-rs" }
 
 [dev-dependencies]
 hex = { version = "^0.4.3", features = ["serde"] }

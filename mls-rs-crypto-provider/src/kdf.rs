@@ -1,125 +1,57 @@
 // Copyright by contributors to this project.
 // SPDX-License-Identifier: MIT
 
-use std::mem::MaybeUninit;
-
-use crate::aws_lc_sys_impl::{
-    EVP_sha256, EVP_sha384, EVP_sha512, HKDF_expand, HKDF_extract, EVP_MD,
-};
-use aws_lc_rs::{digest, error::Unspecified, hmac};
+use hmac::{Hmac, Mac};
 use mls_rs_core::crypto::CipherSuite;
-use mls_rs_crypto_traits::{Hash, KdfId};
+use mls_rs_crypto_traits::{Hash, KdfId, KdfType};
+#[cfg(feature = "post-quantum")]
+use sha2::Digest;
+use sha2::{Sha256, Sha384, Sha512};
+use sha3::{Sha3_256, Sha3_384, Sha3_512};
 
 use crate::MlsCryptoError;
 
-#[derive(Clone, Copy)]
-pub struct AwsLcHkdf(pub(crate) KdfId);
-
-impl AwsLcHkdf {
-    pub fn new(cipher_suite: CipherSuite) -> Option<Self> {
-        KdfId::new(cipher_suite).map(Self)
-    }
-
-    pub(crate) fn hash_function(&self) -> Result<*const EVP_MD, MlsCryptoError> {
-        match self.0 {
-            KdfId::HkdfSha256 => Ok(unsafe { EVP_sha256() }),
-            KdfId::HkdfSha384 => Ok(unsafe { EVP_sha384() }),
-            KdfId::HkdfSha512 => Ok(unsafe { EVP_sha512() }),
-            _ => Err(MlsCryptoError::InvalidKeyData),
-        }
-    }
-}
-
-#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
-#[cfg_attr(all(target_arch = "wasm32", mls_build_async), maybe_async::must_be_async(?Send))]
-#[cfg_attr(
-    all(not(target_arch = "wasm32"), mls_build_async),
-    maybe_async::must_be_async
-)]
-impl mls_rs_crypto_traits::KdfType for AwsLcHkdf {
-    type Error = MlsCryptoError;
-
-    fn kdf_id(&self) -> u16 {
-        self.0 as u16
-    }
-
-    async fn expand(&self, prk: &[u8], info: &[u8], len: usize) -> Result<Vec<u8>, Self::Error> {
-        let mut out = vec![0u8; len];
-        let hash = self.hash_function()?;
-
-        unsafe {
-            if 1 != HKDF_expand(
-                out.as_mut_ptr(),
-                out.len(),
-                hash,
-                prk.as_ptr(),
-                prk.len(),
-                info.as_ptr(),
-                info.len(),
-            ) {
-                return Err(Unspecified.into());
-            };
-        }
-
-        Ok(out)
-    }
-
-    async fn extract(&self, salt: &[u8], ikm: &[u8]) -> Result<Vec<u8>, Self::Error> {
-        let mut out = vec![0u8; self.extract_size()];
-        let hash = self.hash_function()?;
-
-        unsafe {
-            if 1 != HKDF_extract(
-                out.as_mut_ptr(),
-                MaybeUninit::<_>::uninit().as_mut_ptr(), // We already know the length
-                hash,
-                ikm.as_ptr(),
-                ikm.len(),
-                salt.as_ptr(),
-                salt.len(),
-            ) {
-                return Err(Unspecified.into());
-            };
-        }
-
-        Ok(out)
-    }
-
-    fn extract_size(&self) -> usize {
-        self.0.extract_size()
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HashAlgorithm {
+    Sha256,
+    Sha384,
+    Sha512,
+    #[cfg(feature = "post-quantum")]
+    Sha3_256,
+    #[cfg(feature = "post-quantum")]
+    Sha3_384,
+    #[cfg(feature = "post-quantum")]
+    Sha3_512,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct AwsLcHash {
-    pub(crate) algo: &'static digest::Algorithm,
+pub struct RustCryptoHash {
+    pub(crate) kind: HashAlgorithm,
 }
 
-impl AwsLcHash {
+impl RustCryptoHash {
     pub fn new(cipher_suite: CipherSuite) -> Option<Self> {
-        let algo = match cipher_suite {
+        let kind = match cipher_suite {
             CipherSuite::CURVE25519_AES128
             | CipherSuite::CURVE25519_CHACHA
-            | CipherSuite::P256_AES128 => hmac::HMAC_SHA256,
-            CipherSuite::P384_AES256 => hmac::HMAC_SHA384,
-            CipherSuite::P521_AES256 => hmac::HMAC_SHA512,
+            | CipherSuite::P256_AES128 => HashAlgorithm::Sha256,
+            CipherSuite::P384_AES256 => HashAlgorithm::Sha384,
+            CipherSuite::CURVE448_CHACHA
+            | CipherSuite::CURVE448_AES256
+            | CipherSuite::P521_AES256 => HashAlgorithm::Sha512,
             _ => return None,
         };
-
-        Some(Self {
-            algo: algo.digest_algorithm(),
-        })
+        Some(Self { kind })
     }
 
     #[cfg(feature = "post-quantum")]
     pub fn new_sha3(sha3: Sha3) -> Option<Self> {
-        let algo = match sha3 {
-            Sha3::SHA3_256 => &digest::SHA3_256,
-            Sha3::SHA3_384 => &digest::SHA3_384,
-            Sha3::SHA3_512 => &digest::SHA3_512,
+        let kind = match sha3 {
+            Sha3::SHA3_256 => HashAlgorithm::Sha3_256,
+            Sha3::SHA3_384 => HashAlgorithm::Sha3_384,
+            Sha3::SHA3_512 => HashAlgorithm::Sha3_512,
         };
-
-        Some(Self { algo })
+        Some(Self { kind })
     }
 }
 
@@ -132,62 +64,124 @@ pub enum Sha3 {
     SHA3_512,
 }
 
-impl Hash for AwsLcHash {
+impl Hash for RustCryptoHash {
     type Error = MlsCryptoError;
 
     fn hash(&self, data: &[u8]) -> Result<Vec<u8>, Self::Error> {
-        Ok(digest::digest(self.algo, data).as_ref().to_vec())
+        let out = match self.kind {
+            HashAlgorithm::Sha256 => Sha256::digest(data).to_vec(),
+            HashAlgorithm::Sha384 => Sha384::digest(data).to_vec(),
+            HashAlgorithm::Sha512 => Sha512::digest(data).to_vec(),
+            #[cfg(feature = "post-quantum")]
+            HashAlgorithm::Sha3_256 => Sha3_256::digest(data).to_vec(),
+            #[cfg(feature = "post-quantum")]
+            HashAlgorithm::Sha3_384 => Sha3_384::digest(data).to_vec(),
+            #[cfg(feature = "post-quantum")]
+            HashAlgorithm::Sha3_512 => Sha3_512::digest(data).to_vec(),
+        };
+        Ok(out)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RustCryptoHkdf(pub(crate) KdfId);
+
+impl RustCryptoHkdf {
+    pub fn new(cipher_suite: CipherSuite) -> Option<Self> {
+        KdfId::new(cipher_suite).map(Self)
+    }
+
+    fn digest_len(&self) -> usize {
+        self.0.extract_size()
+    }
+
+    fn hash_function(&self, key: &[u8], data: &[u8]) -> Result<Vec<u8>, MlsCryptoError> {
+        match self.0 {
+            KdfId::HkdfSha256 => {
+                let mut h = Hmac::<Sha256>::new_from_slice(key).unwrap();
+                h.update(data);
+                Ok(h.finalize().into_bytes().to_vec())
+            }
+            KdfId::HkdfSha384 => {
+                let mut h = Hmac::<Sha384>::new_from_slice(key).unwrap();
+                h.update(data);
+                Ok(h.finalize().into_bytes().to_vec())
+            }
+            KdfId::HkdfSha512 => {
+                let mut h = Hmac::<Sha512>::new_from_slice(key).unwrap();
+                h.update(data);
+                Ok(h.finalize().into_bytes().to_vec())
+            }
+            _ => Err(MlsCryptoError::InvalidKeyData),
+        }
+    }
+}
+
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+#[cfg_attr(all(target_arch = "wasm32", mls_build_async), maybe_async::must_be_async(?Send))]
+#[cfg_attr(
+    all(not(target_arch = "wasm32"), mls_build_async),
+    maybe_async::must_be_async
+)]
+impl KdfType for RustCryptoHkdf {
+    type Error = MlsCryptoError;
+
+    fn kdf_id(&self) -> u16 {
+        self.0 as u16
+    }
+
+    async fn extract(&self, salt: &[u8], ikm: &[u8]) -> Result<Vec<u8>, Self::Error> {
+        self.hash_function(salt, ikm)
+    }
+
+    async fn expand(&self, prk: &[u8], info: &[u8], len: usize) -> Result<Vec<u8>, Self::Error> {
+        let hash_len = self.digest_len();
+        let n = (len + hash_len - 1) / hash_len;
+
+        let mut okm = Vec::with_capacity(len);
+        let mut previous_block = Vec::new();
+
+        for i in 1..=n {
+            let mut input = previous_block.clone();
+            input.extend_from_slice(info);
+            input.push(i as u8);
+
+            previous_block = self.hash_function(prk, &input)?;
+            okm.extend_from_slice(&previous_block);
+        }
+
+        okm.truncate(len);
+        Ok(okm)
+    }
+
+    fn extract_size(&self) -> usize {
+        self.digest_len()
     }
 }
 
 #[cfg(feature = "post-quantum")]
 pub mod shake {
-    use crate::aws_lc_sys_impl::{EVP_Digest, EVP_shake128};
-    use crate::{check_int_return, MlsCryptoError};
+    use crate::MlsCryptoError;
     use mls_rs_crypto_traits::VariableLengthHash;
-    use std::{os::raw::c_uint, ptr::null_mut};
+    use sha3::{
+        digest::{ExtendableOutput, Update, XofReader},
+        Shake128,
+    };
 
     #[derive(Clone, Copy, Debug)]
-    pub struct AwsLcShake128;
+    pub struct RustCryptoShake128;
 
-    impl VariableLengthHash for AwsLcShake128 {
+    impl VariableLengthHash for RustCryptoShake128 {
         type Error = MlsCryptoError;
 
         fn hash(&self, input: &[u8], out_len: usize) -> Result<Vec<u8>, Self::Error> {
+            let mut hasher = Shake128::default();
+            hasher.update(input);
+            let mut reader = hasher.finalize_xof();
+
             let mut output = vec![0u8; out_len];
-
-            let mut len: u32 = out_len
-                .try_into()
-                .map_err(|_| MlsCryptoError::CryptoError)?;
-
-            unsafe {
-                check_int_return(EVP_Digest(
-                    input.as_ptr().cast(),
-                    input.len(),
-                    output.as_mut_ptr(),
-                    &mut len as *mut c_uint,
-                    EVP_shake128(),
-                    null_mut(),
-                ))?;
-            }
-
+            reader.read(&mut output);
             Ok(output)
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use mls_rs_crypto_traits::VariableLengthHash;
-
-        use super::AwsLcShake128;
-
-        #[test]
-        fn shake() {
-            let input = b"\x84\xe9\x50\x05\x18\x76\x05\x0d\xc8\x51\xfb\xd9\x9e\x62\x47\xb8";
-            let output = AwsLcShake128.hash(input, 16).unwrap();
-            let expected = b"\x85\x99\xbd\x89\xf6\x3a\x84\x8c\x49\xca\x59\x3e\xc3\x7a\x12\xc6";
-
-            assert_eq!(&output, expected);
         }
     }
 }

@@ -30,7 +30,10 @@ pub fn ed448_public_key_from_der(data: &[u8]) -> Result<Ed448PublicKey, ErrorSta
 }
 
 #[inline(always)]
-fn openssl_pub_key_from_uncompressed_non_nist(bytes: &[u8], id: Id) -> Result<Ed448PublicKey, ErrorStack> {
+fn openssl_pub_key_from_uncompressed_non_nist(
+    bytes: &[u8],
+    id: Id,
+) -> Result<Ed448PublicKey, ErrorStack> {
     PKey::public_key_from_raw_bytes(bytes, id)
 }
 
@@ -52,9 +55,7 @@ pub fn ed448_pub_key_to_uncompressed(key: &Ed448PublicKey) -> Result<Vec<u8>, Er
     }
 }
 
-pub fn ed448_private_key_from_bytes(
-    bytes: &[u8],
-) -> Result<Ed448PrivateKey, EcError> {
+pub fn ed448_private_key_from_bytes(bytes: &[u8]) -> Result<Ed448PrivateKey, EcError> {
     let openssl_secret_len = Curve::Ed448.secret_key_size() / 2;
 
     (openssl_secret_len <= bytes.len())
@@ -69,7 +70,7 @@ pub fn ed448_private_key_from_bytes(
 
 pub fn ed448_private_key_to_bytes(private_key: &Ed448PrivateKey) -> Result<Vec<u8>, EcError> {
     if private_key.id() != Id::X448 {
-        return Err(EcError::InvalidKeyBytes)
+        return Err(EcError::InvalidKeyBytes);
     }
 
     if let Ok(ec_key) = private_key.ec_key() {
@@ -79,9 +80,11 @@ pub fn ed448_private_key_to_bytes(private_key: &Ed448PrivateKey) -> Result<Vec<u
     }
 }
 
-pub fn ed448_private_key_to_public(private_key: &Ed448PrivateKey) -> Result<Ed448PublicKey, EcError> {
+pub fn ed448_private_key_to_public(
+    private_key: &Ed448PrivateKey,
+) -> Result<Ed448PublicKey, EcError> {
     if private_key.id() != Id::X448 {
-        return Err(EcError::InvalidKeyBytes)
+        return Err(EcError::InvalidKeyBytes);
     }
 
     if let Ok(ec_key) = private_key.ec_key() {
@@ -89,6 +92,9 @@ pub fn ed448_private_key_to_public(private_key: &Ed448PrivateKey) -> Result<Ed44
         Ok(PKey::from_ec_key(pub_key)?)
     } else {
         let key_data = private_key.raw_public_key()?;
-        Ok(openssl_pub_key_from_uncompressed_non_nist(&key_data, Id::X448)?)
+        Ok(openssl_pub_key_from_uncompressed_non_nist(
+            &key_data,
+            Id::X448,
+        )?)
     }
 }

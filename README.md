@@ -29,4 +29,4 @@ TODO (roughly in order):
 | `MLS_256_DHKEMX448_AES256GCM_SHA512_Ed448`            | ✅         | OpenSSL      |
 | `MLS_256_DHKEMP521_AES256GCM_SHA512_P521`             | ✅         | aws-lc       |
 | `MLS_256_DHKEMX448_CHACHA20POLY1305_SHA512_Ed448`     | ✅         | OpenSSL      |
-| `MLS_256_DHKEMX448_CHACHA20POLY1305_SHA512_Ed448`     | ✅         | OpenSSL      |
+| `MLS_256_DHKEMP384_AES256GCM_SHA384_P384`             | ✅         | OpenSSL      |

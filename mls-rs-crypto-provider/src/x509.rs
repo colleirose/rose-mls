@@ -32,7 +32,11 @@ use openssl::{
 };
 use thiserror::Error;
 
-use crate::{ec::{curve_to_id, EcError, EcPrivateKey}, ec_signer::{EcSigner, EcSignerError}, MlsCryptoError};
+use crate::{
+    ec::{curve_to_id, EcError, EcPrivateKey},
+    ec_signer::{EcSigner, EcSignerError},
+    MlsCryptoError,
+};
 
 #[derive(Debug, Error)]
 pub enum X509Error {

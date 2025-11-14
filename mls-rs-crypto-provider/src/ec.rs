@@ -1,7 +1,7 @@
 // Copyright by contributors to this project.
 // SPDX-License-Identifier: MIT
 
-use core::fmt::{self, Debug};
+use core::fmt::{Debug};
 use std::ptr::null_mut;
 use mls_rs_crypto_traits::Curve;
 use thiserror::Error;
@@ -219,7 +219,7 @@ impl AwsLcPrivateKey {
     pub fn generate(curve: Curve) -> Result<Self, Unspecified> {
         let nid = nist_curve_id(curve).ok_or(Unspecified)?;
 
-        // SAFETY: From the AWS-LC code. Safe when used correctly.
+        // SAFETY: From the AWS-LC code. Returns a pointer that could be used unsafely.
         let key = unsafe { EC_KEY_new_by_curve_name(nid) };
 
         if key.is_null() {

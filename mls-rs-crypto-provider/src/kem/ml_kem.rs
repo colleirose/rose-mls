@@ -18,13 +18,13 @@ use mls_rs_crypto_traits::{KdfType, KemResult, KemType};
 
 use rand_core::{OsRng, RngCore};
 
-use likely_stable::{likely,unlikely};
+use likely_stable::{likely, unlikely};
 
-use crate::{check_non_null, kdf::AwsLcHkdf, MlsCryptoError};
+use crate::{check_non_null, kdf::RustCryptoHkdf, MlsCryptoError};
 
 #[derive(Clone)]
 pub struct MlKemKem {
-    pub(crate) kdf: AwsLcHkdf,
+    pub(crate) kdf: RustCryptoHkdf,
     pub(crate) ml_kem: MlKem,
 }
 
@@ -32,9 +32,9 @@ impl MlKemKem {
     pub fn new(cipher_suite: CipherSuite) -> Option<Self> {
         let kdf = match cipher_suite {
             CipherSuite::ML_KEM_512 | CipherSuite::ML_KEM_768 => {
-                AwsLcHkdf::new(CipherSuite::CURVE25519_AES128)?
+                RustCryptoHkdf::new(CipherSuite::CURVE25519_AES128)?
             }
-            CipherSuite::ML_KEM_1024 => AwsLcHkdf::new(CipherSuite::P384_AES256)?,
+            CipherSuite::ML_KEM_1024 => RustCryptoHkdf::new(CipherSuite::P384_AES256)?,
             _ => return None,
         };
 

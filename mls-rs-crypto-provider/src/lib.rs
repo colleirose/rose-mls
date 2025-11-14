@@ -3,23 +3,22 @@
 
 mod aead;
 mod ec;
+mod ec_signer;
+mod ed448;
 mod hmac;
 mod kdf;
 mod kem;
-mod ed448;
-mod ec_signer;
 
 pub mod x509;
 
 use aws_lc_sys as aws_lc_sys_impl;
-pub use hmac::AwsLcHmac;
+pub use hmac::RustCryptoHmac;
 
-use std::{ffi::c_int, num::TryFromIntError};
+use std::num::TryFromIntError;
 
 pub use aead::AwsLcAead;
 use aws_lc_rs::error::{KeyRejected, Unspecified};
 
-use sha2::{Sha256, Digest};
 use mls_rs_core::{
     crypto::{
         CipherSuite, CipherSuiteProvider, CryptoProvider, HpkeCiphertext, HpkePublicKey,
@@ -27,9 +26,10 @@ use mls_rs_core::{
     },
     error::{AnyError, IntoAnyError},
 };
+use sha2::{Digest, Sha256};
 
 use ec_signer::EcSigner;
-pub use kdf::AwsLcHkdf;
+pub use kdf::RustCryptoHkdf;
 pub use kem::ecdh::Ecdh;
 use mls_rs_crypto_hpke::{
     context::{ContextR, ContextS},
@@ -38,8 +38,8 @@ use mls_rs_crypto_hpke::{
 };
 use mls_rs_crypto_traits::{AeadId, AeadType, Curve, Hash, KdfId, KdfType, KemId};
 
-use rand_core::{OsRng, RngCore};
 pub use openssl;
+use rand_core::{OsRng, RngCore};
 
 use thiserror::Error;
 use zeroize::Zeroizing;
@@ -49,11 +49,12 @@ use ec::EcError;
 //use ecdh::Ecdh;
 use openssl::error::ErrorStack;
 
-use self::kdf::shake::AwsLcShake128;
-use mls_rs_crypto_hpke::kem_combiner::xwing::{CombinedKem, XWingSharedSecretHashInput};
-pub use self::kem::ml_kem::{MlKem, MlKemKem};
+use crate::kdf::RustCryptoHash;
+
+use self::kdf::shake::RustCryptoShake128;
 pub use self::kdf::Sha3;
-pub use self::kdf::AwsLcHash;
+pub use self::kem::ml_kem::{MlKem, MlKemKem};
+use mls_rs_crypto_hpke::kem_combiner::xwing::{CombinedKem, XWingSharedSecretHashInput};
 
 #[derive(Debug, Error)]
 pub enum MlsCryptoError {
@@ -108,23 +109,23 @@ pub struct AwsLcCipherSuite {
     cipher_suite: CipherSuite,
     signing: EcSigner,
     aead: AwsLcAead,
-    kdf: AwsLcHkdf,
+    kdf: RustCryptoHkdf,
     hpke: AwsLcHpke,
-    hmac: AwsLcHmac,
-    hash: AwsLcHash,
+    hmac: RustCryptoHmac,
+    hash: RustCryptoHash,
 }
 
-pub type EcdhKem = DhKem<Ecdh, AwsLcHkdf>;
+pub type EcdhKem = DhKem<Ecdh, RustCryptoHkdf>;
 
 pub type CombinedEcdhMlKemKem =
-    CombinedKem<MlKemKem, EcdhKem, AwsLcHash, AwsLcShake128, XWingSharedSecretHashInput>;
+    CombinedKem<MlKemKem, EcdhKem, RustCryptoHash, RustCryptoShake128, XWingSharedSecretHashInput>;
 
 #[derive(Clone)]
 #[non_exhaustive]
 enum AwsLcHpke {
-    Classical(Hpke<EcdhKem, AwsLcHkdf, AwsLcAead>),
-    PostQuantum(Hpke<MlKemKem, AwsLcHkdf, AwsLcAead>),
-    Combined(Hpke<CombinedEcdhMlKemKem, AwsLcHkdf, AwsLcAead>),
+    Classical(Hpke<EcdhKem, RustCryptoHkdf, AwsLcAead>),
+    PostQuantum(Hpke<MlKemKem, RustCryptoHkdf, AwsLcAead>),
+    Combined(Hpke<CombinedEcdhMlKemKem, RustCryptoHkdf, AwsLcAead>),
 }
 
 impl AwsLcCipherSuite {
@@ -201,10 +202,10 @@ impl MainCryptoProvider {
 pub struct AwsLcCipherSuiteBuilder {
     signing: Option<EcSigner>,
     aead: Option<AwsLcAead>,
-    kdf: Option<AwsLcHkdf>,
+    kdf: Option<RustCryptoHkdf>,
     hpke: Option<AwsLcHpke>,
-    hmac: Option<AwsLcHmac>,
-    hash: Option<AwsLcHash>,
+    hmac: Option<RustCryptoHmac>,
+    hash: Option<RustCryptoHash>,
     fallback_cipher_suite: Option<CipherSuite>,
 }
 
@@ -229,19 +230,19 @@ impl AwsLcCipherSuiteBuilder {
 
     pub fn kdf(self, kdf: KdfId) -> Self {
         Self {
-            kdf: Some(AwsLcHkdf(kdf)),
+            kdf: Some(RustCryptoHkdf(kdf)),
             ..self
         }
     }
 
-    pub fn hmac(self, hmac: AwsLcHmac) -> Self {
+    pub fn hmac(self, hmac: RustCryptoHmac) -> Self {
         Self {
             hmac: Some(hmac),
             ..self
         }
     }
 
-    pub fn hash(self, hash: AwsLcHash) -> Self {
+    pub fn hash(self, hash: RustCryptoHash) -> Self {
         Self {
             hash: Some(hash),
             ..self
@@ -266,13 +267,13 @@ impl AwsLcCipherSuiteBuilder {
     pub fn pq_hpke(self, ml_kem: MlKem, kdf: KdfId, aead: AeadId) -> Self {
         let ml_kem = MlKemKem {
             ml_kem,
-            kdf: AwsLcHkdf(kdf),
+            kdf: RustCryptoHkdf(kdf),
         };
 
         Self {
             hpke: Some(AwsLcHpke::PostQuantum(Hpke::new(
                 ml_kem,
-                AwsLcHkdf(kdf),
+                RustCryptoHkdf(kdf),
                 Some(AwsLcAead(aead)),
             ))),
             ..self
@@ -286,19 +287,19 @@ impl AwsLcCipherSuiteBuilder {
         ml_kem: MlKem,
         kdf: KdfId,
         aead: AeadId,
-        hash: AwsLcHash,
+        hash: RustCryptoHash,
     ) -> Self {
         let ml_kem = MlKemKem {
             ml_kem,
-            kdf: AwsLcHkdf(kdf),
+            kdf: RustCryptoHkdf(kdf),
         };
 
         let ecdh = dhkem(classical_cipher_suite);
 
         let hpke = ecdh.map(|ecdh| {
-            let kem = CombinedKem::new_xwing(ml_kem, ecdh, hash, AwsLcShake128);
+            let kem = CombinedKem::new_xwing(ml_kem, ecdh, hash, RustCryptoShake128);
 
-            AwsLcHpke::Combined(Hpke::new(kem, AwsLcHkdf(kdf), Some(AwsLcAead(aead))))
+            AwsLcHpke::Combined(Hpke::new(kem, RustCryptoHkdf(kdf), Some(AwsLcAead(aead))))
         });
 
         Self { hpke, ..self }
@@ -311,19 +312,19 @@ impl AwsLcCipherSuiteBuilder {
         ml_kem: MlKem,
         kdf: KdfId,
         aead: AeadId,
-        hash: AwsLcHash,
+        hash: RustCryptoHash,
     ) -> Self {
         let ml_kem = MlKemKem {
             ml_kem,
-            kdf: AwsLcHkdf(kdf),
+            kdf: RustCryptoHkdf(kdf),
         };
 
         let ecdh = dhkem(classical_cipher_suite);
 
         let hpke = ecdh.map(|ecdh| {
-            let kem = CombinedKem::new_xwing(ml_kem, ecdh, hash, AwsLcShake128);
+            let kem = CombinedKem::new_xwing(ml_kem, ecdh, hash, RustCryptoShake128);
 
-            AwsLcHpke::Combined(Hpke::new(kem, AwsLcHkdf(kdf), Some(AwsLcAead(aead))))
+            AwsLcHpke::Combined(Hpke::new(kem, RustCryptoHkdf(kdf), Some(AwsLcAead(aead))))
         });
 
         Self { hpke, ..self }
@@ -332,11 +333,11 @@ impl AwsLcCipherSuiteBuilder {
     pub fn build(self, cipher_suite: CipherSuite) -> Option<AwsLcCipherSuite> {
         let fallback_cs = self.fallback_cipher_suite.unwrap_or(cipher_suite);
         let hpke = self.hpke.or_else(|| classical_hpke(fallback_cs))?;
-        let kdf = self.kdf.or_else(|| AwsLcHkdf::new(fallback_cs))?;
+        let kdf = self.kdf.or_else(|| RustCryptoHkdf::new(fallback_cs))?;
         let aead = self.aead.or_else(|| AwsLcAead::new(fallback_cs))?;
         let signing = self.signing.or_else(|| EcSigner::new(fallback_cs))?;
-        let hmac = self.hmac.or_else(|| AwsLcHmac::new(fallback_cs))?;
-        let hash = self.hash.or_else(|| AwsLcHash::new(fallback_cs))?;
+        let hmac = self.hmac.or_else(|| RustCryptoHmac::new(fallback_cs))?;
+        let hash = self.hash.or_else(|| RustCryptoHash::new(fallback_cs))?;
 
         Some(AwsLcCipherSuite {
             cipher_suite,
@@ -353,7 +354,7 @@ impl AwsLcCipherSuiteBuilder {
 fn classical_hpke(cipher_suite: CipherSuite) -> Option<AwsLcHpke> {
     Some(AwsLcHpke::Classical(Hpke::new(
         dhkem(cipher_suite)?,
-        AwsLcHkdf::new(cipher_suite)?,
+        RustCryptoHkdf::new(cipher_suite)?,
         Some(AwsLcAead::new(cipher_suite)?),
     )))
 }
@@ -379,9 +380,9 @@ impl CryptoProvider for MainCryptoProvider {
             _ => cipher_suite,
         };
 
-        let kdf = AwsLcHkdf::new(classical_cs)?;
+        let kdf = RustCryptoHkdf::new(classical_cs)?;
         let aead = AwsLcAead::new(classical_cs)?;
-        let hmac = AwsLcHmac::new(classical_cs)?;
+        let hmac = RustCryptoHmac::new(classical_cs)?;
 
         let hpke = match cipher_suite {
             #[cfg(feature = "post-quantum")]
@@ -393,8 +394,8 @@ impl CryptoProvider for MainCryptoProvider {
                 let kem = CombinedKem::new_xwing(
                     MlKemKem::new(CipherSuite::ML_KEM_768)?,
                     dhkem(classical_cs)?,
-                    AwsLcHash::new_sha3(Sha3::SHA3_256)?,
-                    AwsLcShake128,
+                    RustCryptoHash::new_sha3(Sha3::SHA3_256)?,
+                    RustCryptoShake128,
                 );
 
                 AwsLcHpke::Combined(Hpke::new(kem, kdf, Some(aead)))
@@ -409,15 +410,15 @@ impl CryptoProvider for MainCryptoProvider {
             kdf,
             signing: EcSigner::new(classical_cs)?,
             hmac,
-            hash: AwsLcHash::new(classical_cs)?,
+            hash: RustCryptoHash::new(classical_cs)?,
         })
     }
 }
 
-pub fn dhkem(cipher_suite: CipherSuite) -> Option<DhKem<Ecdh, AwsLcHkdf>> {
+pub fn dhkem(cipher_suite: CipherSuite) -> Option<DhKem<Ecdh, RustCryptoHkdf>> {
     let kem_id = KemId::new(cipher_suite)?;
     let dh = Ecdh::new(cipher_suite)?;
-    let kdf = AwsLcHkdf::new(cipher_suite)?;
+    let kdf = RustCryptoHkdf::new(cipher_suite)?;
 
     Some(DhKem::new(dh, kdf, kem_id as u16, kem_id.n_secret()))
 }
@@ -431,8 +432,8 @@ pub fn dhkem(cipher_suite: CipherSuite) -> Option<DhKem<Ecdh, AwsLcHkdf>> {
 impl CipherSuiteProvider for AwsLcCipherSuite {
     type Error = MlsCryptoError;
 
-    type HpkeContextS = ContextS<AwsLcHkdf, AwsLcAead>;
-    type HpkeContextR = ContextR<AwsLcHkdf, AwsLcAead>;
+    type HpkeContextS = ContextS<RustCryptoHkdf, AwsLcAead>;
+    type HpkeContextR = ContextR<RustCryptoHkdf, AwsLcAead>;
 
     fn cipher_suite(&self) -> mls_rs_core::crypto::CipherSuite {
         self.cipher_suite
@@ -651,21 +652,12 @@ impl CipherSuiteProvider for AwsLcCipherSuite {
     }
 }
 
-#[inline]
+#[inline(always)]
 pub fn sha256(data: &[u8]) -> [u8; 32] {
     Sha256::digest(data).into()
 }
 
-#[inline]
-fn check_int_return(r: c_int) -> Result<c_int, MlsCryptoError> {
-    if r > 0 {
-        Ok(r)
-    } else {
-        Err(MlsCryptoError::CryptoError)
-    }
-}
-
-#[inline]
+#[inline(always)]
 fn check_non_null<T>(r: *mut T) -> Result<*mut T, MlsCryptoError> {
     if r.is_null() {
         return Err(MlsCryptoError::CryptoError);
@@ -682,7 +674,7 @@ fn mls_core_tests() {
     for cs in MainCryptoProvider::supported_classical_cipher_suites() {
         let mut hpke = Hpke::new(
             dhkem(cs).unwrap(),
-            AwsLcHkdf::new(cs).unwrap(),
+            RustCryptoHkdf::new(cs).unwrap(),
             AwsLcAead::new(cs),
         );
 
@@ -694,9 +686,7 @@ fn mls_core_tests() {
 #[test]
 fn pq_cipher_suite_test() {
     for cs in MainCryptoProvider::supported_pq_cipher_suites() {
-        let cs = MainCryptoProvider::new()
-            .cipher_suite_provider(cs)
-            .unwrap();
+        let cs = MainCryptoProvider::new().cipher_suite_provider(cs).unwrap();
 
         let (sk, pk) = cs.kem_derive(&[0u8; 64]).unwrap();
         let ct = cs.hpke_seal(&pk, b"info", None, b"very secret").unwrap();
