@@ -46,6 +46,7 @@ impl EcSigner {
         Curve::from_ciphersuite(cipher_suite, true).map(Self)
     }
 
+    #[inline(always)]
     pub fn signature_key_generate(
         &self,
     ) -> Result<(SignatureSecretKey, SignaturePublicKey), MlsCryptoError> {
@@ -53,6 +54,7 @@ impl EcSigner {
         Ok((key_pair.0.into(), key_pair.1.into()))
     }
 
+    #[inline(always)]
     pub fn signature_key_import_der_public(
         &self,
         der_data: &[u8],
@@ -63,6 +65,7 @@ impl EcSigner {
             .into())
     }
 
+    #[inline(always)]
     pub fn signature_key_import_der_private(
         &self,
         der_data: &[u8],
@@ -73,6 +76,7 @@ impl EcSigner {
             .into())
     }
 
+    #[inline(always)]
     pub fn signature_key_derive_public(
         &self,
         secret_key: &SignatureSecretKey,
@@ -82,6 +86,7 @@ impl EcSigner {
     }
 
     #[cfg(feature = "x509")]
+    #[inline(always)]
     pub(crate) fn ec_key_from_signature_secret_key(
         &self,
         key: &SignatureSecretKey,

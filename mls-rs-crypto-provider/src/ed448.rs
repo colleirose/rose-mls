@@ -12,22 +12,29 @@ use openssl::{
 
 use crate::ec::{curve_to_id, EcError, Ed448PrivateKey, Ed448PublicKey};
 
+#[inline(always)]
 pub fn generate_ed448_key() -> Result<Ed448PrivateKey, EcError> {
     Ok(PKey::generate_x448()?)
 }
 
+#[inline(always)]
 pub fn ed448_private_key_from_der(data: &[u8]) -> Result<Ed448PrivateKey, ErrorStack> {
     PKey::private_key_from_der(data)
 }
 
+// It isn't actually unused, but there's a warning about it being unused for some reason.
+#[inline(always)]
+#[allow(unused)]
 pub fn ed448_public_key_from_der(data: &[u8]) -> Result<Ed448PublicKey, ErrorStack> {
     PKey::public_key_from_der(data)
 }
 
+#[inline(always)]
 fn openssl_pub_key_from_uncompressed_non_nist(bytes: &[u8], id: Id) -> Result<Ed448PublicKey, ErrorStack> {
     PKey::public_key_from_raw_bytes(bytes, id)
 }
 
+#[inline]
 pub fn ed448_pub_key_from_uncompressed(bytes: &[u8]) -> Result<Ed448PublicKey, EcError> {
     let id = curve_to_id(Curve::Ed448)?;
     Ok(PKey::public_key_from_raw_bytes(bytes, id)?)

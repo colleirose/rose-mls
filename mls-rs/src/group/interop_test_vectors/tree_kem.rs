@@ -163,7 +163,7 @@ async fn tree_kem() {
 
                 auth_content.auth.confirmation_tag = Some(ConfirmationTag::empty(&cs).await);
 
-                // Hack not to increment epoch
+                // Hack to not increment epoch
                 group.state.context.epoch -= 1;
 
                 group.process_commit(auth_content, None).await.unwrap();

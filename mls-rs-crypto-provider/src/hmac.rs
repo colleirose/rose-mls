@@ -27,6 +27,7 @@ impl AwsLcHmac {
         Some(Self { algo })
     }
 
+    #[inline(always)]
     pub fn hmac(&self, key: &[u8], data: &[u8]) -> Result<Vec<u8>, MlsCryptoError> {
         let key = hmac::Key::new(self.algo, key);
         Ok(hmac::sign(&key, data).as_ref().to_vec())
@@ -36,6 +37,7 @@ impl AwsLcHmac {
 impl RandomOracle for AwsLcHmac {
     type Error = MlsCryptoError;
 
+    #[inline(always)]
     fn eval(&self, data: &[u8]) -> Result<Vec<u8>, MlsCryptoError> {
         self.hmac(&[], data)
     }
